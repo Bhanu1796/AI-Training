@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
+import { ArrowUp, Paperclip, Loader2 } from 'lucide-react'
 import { filesApi } from '@/lib/api'
-import type { UploadedFile } from '@/types'
 
 interface InputBarProps {
   onSend: (content: string) => void
@@ -12,13 +12,24 @@ interface InputBarProps {
 export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarProps) {
   const [value, setValue] = useState('')
   const [isUploading, setIsUploading] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleInput = () => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 180) + 'px'
+  }
 
   const handleSubmit = () => {
     const trimmed = value.trim()
     if (!trimmed || disabled || isUploading) return
     onSend(trimmed)
     setValue('')
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -31,7 +42,6 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !threadId) return
-
     setIsUploading(true)
     try {
       await filesApi.upload(file, threadId, true)
@@ -41,54 +51,71 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
     }
   }
 
+  const canSend = value.trim().length > 0 && !disabled && !isUploading
+
   return (
-    <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-900">
-      <div className="flex items-end gap-2 max-w-4xl mx-auto">
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={!threadId || isUploading}
-          className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40"
-          title="Attach file"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-            />
-          </svg>
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          onChange={handleFileChange}
-          accept="image/*,video/mp4,video/webm,application/pdf,.xlsx,.xls,.csv,.txt"
-        />
+    <div className="px-4 pb-5 pt-2 bg-[#0f0f0f] shrink-0">
+      <div className="max-w-3xl mx-auto">
+        <div className="flex flex-col rounded-2xl border border-white/[0.10] bg-[#1a1a1a] shadow-xl shadow-black/40 overflow-hidden focus-within:border-white/[0.18] transition-colors">
+          {/* Textarea row */}
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onInput={handleInput}
+            onKeyDown={handleKeyDown}
+            disabled={disabled}
+            placeholder={placeholder ?? 'Message Amzur AI\u2026'}
+            rows={1}
+            className="w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-sm text-gray-200 placeholder-gray-600 outline-none disabled:opacity-50 leading-relaxed"
+          />
 
-        <textarea
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-          placeholder={placeholder ?? 'Type a message… (Enter to send)'}
-          rows={1}
-          className="flex-1 resize-none rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-        />
+          {/* Actions row */}
+          <div className="flex items-center justify-between px-3 pb-3 pt-1">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!threadId || isUploading}
+                className="p-1.5 rounded-lg text-gray-600 hover:text-gray-300 hover:bg-white/8 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                title="Attach file"
+              >
+                {isUploading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Paperclip className="w-4 h-4" />
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleFileChange}
+                accept="image/*,video/mp4,video/webm,application/pdf,.xlsx,.xls,.csv,.txt"
+              />
+            </div>
 
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={!value.trim() || disabled}
-          className="p-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-          </svg>
-        </button>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-700 select-none">
+                Shift+Enter for new line
+              </span>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={!canSend}
+                className="w-7 h-7 rounded-lg flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-md shadow-violet-500/20 active:scale-95"
+              >
+                {disabled ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <ArrowUp className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
 }
+

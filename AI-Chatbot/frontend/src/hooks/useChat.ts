@@ -12,6 +12,7 @@ export function useChat(threadId: string | null) {
     queryKey: ['messages', threadId],
     queryFn: () => chatApi.listMessages(threadId!),
     enabled: !!threadId && !justCreatedRef.current,
+    staleTime: Infinity,
   })
 
   const sendMessage = useCallback(
