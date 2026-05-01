@@ -12,6 +12,7 @@ import type { Thread } from '@/types'
 
 export default function ChatPage() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
+  const [showInput, setShowInput] = useState(false)
   const { user } = useAuth()
   const setUser = useAuthStore((s) => s.setUser)
   const queryClient = useQueryClient()
@@ -24,6 +25,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (activeThreadId && threads.length > 0 && !threads.find((t) => t.id === activeThreadId)) {
       setActiveThreadId(null)
+      setShowInput(false)
     }
   }, [threads, activeThreadId])
 
@@ -68,7 +70,8 @@ export default function ChatPage() {
       {/* Sidebar */}
       <ThreadSidebar
         activeThreadId={activeThreadId}
-        onSelectThread={setActiveThreadId}
+        onSelectThread={(id) => { setActiveThreadId(id); setShowInput(id !== null) }}
+        onNewChat={() => { setActiveThreadId(null); setShowInput(true) }}
       />
 
       {/* Main area */}
@@ -113,12 +116,14 @@ export default function ChatPage() {
         )}
 
         {/* Input */}
-        <InputBar
-          onSend={handleSend}
-          threadId={activeThreadId}
-          disabled={isSending}
-          placeholder={activeThreadId ? 'Type a message… (Enter to send)' : 'Type a message to start a new chat…'}
-        />
+        {(activeThreadId || showInput) && (
+          <InputBar
+            onSend={handleSend}
+            threadId={activeThreadId}
+            disabled={isSending}
+            placeholder={activeThreadId ? 'Type a message… (Enter to send)' : 'Type a message to start a new chat…'}
+          />
+        )}
       </div>
     </div>
   )

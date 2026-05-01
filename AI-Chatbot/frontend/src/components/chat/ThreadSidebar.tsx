@@ -6,14 +6,15 @@ import type { Thread } from '@/types'
 interface ThreadSidebarProps {
   activeThreadId: string | null
   onSelectThread: (id: string | null) => void
+  onNewChat: () => void
 }
 
-export function ThreadSidebar({ activeThreadId, onSelectThread }: ThreadSidebarProps) {
+export function ThreadSidebar({ activeThreadId, onSelectThread, onNewChat }: ThreadSidebarProps) {
   const { threads, isLoading, deleteThread, renameThread } = useThreadList()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
 
-  const handleNewChat = () => onSelectThread(null)
+  const handleNewChat = () => onNewChat()
 
   const startRename = (thread: Thread, e: React.MouseEvent) => {
     e.stopPropagation()
