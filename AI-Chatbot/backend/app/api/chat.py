@@ -62,10 +62,17 @@ async def rename_thread(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ThreadRead:
+    from sqlalchemy import update as sa_update
+    from app.models.thread import Thread as ThreadModel
+    await db.execute(
+        sa_update(ThreadModel)
+        .where(ThreadModel.id == thread_id, ThreadModel.user_id == current_user.id)
+        .values(title=body.title)
+    )
     thread = await get_thread(db, thread_id, current_user)
     if not thread:
         raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Thread not found"})
-    thread = await update_thread_title(db, thread, body.title)
+    await db.refresh(thread)
     return ThreadRead.model_validate(thread)
 
 

@@ -5,7 +5,7 @@ import { MessageList } from '@/components/chat/MessageList'
 import { InputBar } from '@/components/chat/InputBar'
 import { useChat } from '@/hooks/useChat'
 import { useAuth } from '@/hooks/useAuth'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { authApi, chatApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/auth'
 import type { Thread } from '@/types'
@@ -19,8 +19,8 @@ export default function ChatPage() {
   const { messages, streamingContent, sendMessage } = useChat(activeThreadId)
   const [isSending, setIsSending] = useState(false)
 
-  // Clear active thread if it was deleted
-  const threads = queryClient.getQueryData<Thread[]>(['threads']) ?? []
+  // Reactively clear active thread if it was deleted
+  const { data: threads = [] } = useQuery<Thread[]>({ queryKey: ['threads'], queryFn: chatApi.listThreads, staleTime: 30_000 })
   useEffect(() => {
     if (activeThreadId && threads.length > 0 && !threads.find((t) => t.id === activeThreadId)) {
       setActiveThreadId(null)
