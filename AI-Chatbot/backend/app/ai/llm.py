@@ -3,7 +3,7 @@ LiteLLM client singletons — import all AI clients from this module.
 Never instantiate LLM clients elsewhere in the codebase.
 """
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 
 from app.core.config import settings
 
@@ -17,8 +17,14 @@ llm = ChatOpenAI(
     streaming=True,
 )
 
-# OpenAI SDK client — used for direct calls (image generation, embeddings via SDK)
+# Sync OpenAI SDK client — kept for non-async contexts
 openai_client = OpenAI(
+    api_key=settings.LITELLM_API_KEY,
+    base_url=settings.LITELLM_PROXY_URL,
+)
+
+# Async OpenAI SDK client — used in async FastAPI routes (image generation)
+async_openai_client = AsyncOpenAI(
     api_key=settings.LITELLM_API_KEY,
     base_url=settings.LITELLM_PROXY_URL,
 )

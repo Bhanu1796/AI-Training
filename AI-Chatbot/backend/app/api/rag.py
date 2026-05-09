@@ -29,6 +29,6 @@ async def rag_query(
         raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Thread not found"})
 
     return StreamingResponse(
-        stream_rag_response(db, thread_id, current_user, body.query),
+        stream_rag_response(db, thread_id, current_user, body.query, file_ids=body.file_ids or []),
         media_type="text/event-stream",
     )

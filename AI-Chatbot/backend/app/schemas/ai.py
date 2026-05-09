@@ -4,6 +4,7 @@ from pydantic import BaseModel
 class RAGQueryRequest(BaseModel):
     thread_id: str
     query: str
+    file_ids: list[str] = []
 
 
 class ImageGenerateRequest(BaseModel):
@@ -23,7 +24,7 @@ class SQLQueryRequest(BaseModel):
 
 class SQLQueryResponse(BaseModel):
     answer: str
-    generated_sql: str
+    generated_sql: str | None = None
     thread_id: str
 
 

@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # ChromaDB
     CHROMA_PERSIST_DIR: str = "./chroma_db"
 
+    # NL-to-SQL target database (defaults to the app database if not set)
+    SQL_QUERY_DATABASE_URL: str | None = None
+
     # Google Sheets
     GOOGLE_SERVICE_ACCOUNT_JSON: Optional[str] = None
 

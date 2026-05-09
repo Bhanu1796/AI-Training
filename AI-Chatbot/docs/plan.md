@@ -1,0 +1,59 @@
+# Amzur AI Chat — Project Plan
+
+## Project 1: Basic AI Chat
+**Status:** ✅ Complete  
+Full conversational chat backed by Gemini 2.5 Flash via LiteLLM proxy. User registration/login with JWT, per-thread message persistence in PostgreSQL.
+
+## Project 2: Google OAuth Login
+**Status:** ✅ Complete  
+Google OAuth 2.0 flow with httpOnly cookie-based sessions. Falls back to email/password auth.
+
+## Project 3: File Attachments in Chat (Images, Videos, Code, Formulas, Tables)
+**Status:** ✅ Complete  
+Attach any file to a chat message. Server-side MIME sniffing + extension overrides classify files as `image | video | pdf | excel | code | formula`. Images/videos are passed as base64 multimodal content to Gemini (vision). Code/formula files are text-injected as fenced code blocks. Tables are converted via pandas.
+
+## Project 4: Conversation Memory (Last 5 Exchanges)
+**Status:** ✅ Complete  
+DB-backed memory via `load_history()`. Each request fetches the last 10 messages (5 user + 5 assistant) from the thread and injects them as LangChain `HumanMessage`/`AIMessage` objects into the chat chain.
+
+## Project 5: Multi-format Attachments
+**Status:** ✅ Complete  
+Extended Project 3 to include code files (`.py`, `.js`, `.ts`, `.java`, etc.) and LaTeX formula files (`.tex`). The InputBar shows `</>` for code and `Σ` for formulas. Image attachments show a thumbnail preview.
+
+## Project 6: Image Generation
+**Status:** ✅ Complete  
+Generates images via Gemini Imagen 4. Images are saved to `uploads/generated/` and served via `/api/image/serve/{filename}` (stable local URL — no expiry). Both user prompt and assistant image message are persisted to DB. Follow-up edits (e.g. "remove trees") are detected and combined with the original prompt automatically.
+
+## Project 7: PDF RAG Chat
+**Status:** ✅ Complete  
+Upload a PDF into a chat thread and ask questions about it. Uses ChromaDB for vector storage and OpenAI text-embedding-3-large for embeddings.
+
+**See:** [Project 7 — PDF RAG Chat](./project7-rag.md)
+
+## Project 8: Natural Language Database Queries (NL-to-SQL)
+**Status:** ✅ Complete
+
+Ask any question in plain English and receive a natural-language answer backed by a live SQL query against the database.
+
+### Architecture
+| Layer | Detail |
+|---|---|
+| **Trigger** | User clicks the `Database` icon in the InputBar to activate SQL mode for the thread |
+| **Frontend** | `sqlMode` state in `InputBar`; `sqlThreadIds` set in `ChatPage` persists mode across messages; cyan SQL-mode banner shown |
+| **API** | `POST /api/sql/query` → `SQLQueryRequest { thread_id, question }` |
+| **Service** | `sql_service.query_database()` — LangChain `create_sql_agent` + `SQLDatabaseToolkit` |
+| **DB driver** | psycopg2 (sync) inside `asyncio.to_thread()` so the FastAPI event loop is never blocked |
+| **Display** | Answer shown in chat + generated SQL rendered as a `sql` code block |
+| **Persistence** | User question + AI answer (with SQL block) saved to DB via `save_message()` |
+
+### Security
+- Blocked keywords: `INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, `ALTER` — checked on both the user question and generated SQL
+- `SQL_QUERY_DATABASE_URL` env var allows pointing at a read-only replica or separate DB (falls back to app DB)
+- SQL mode must be explicitly toggled; no automatic heuristic that could misfire
+
+### Key Files
+- `backend/app/api/sql_query.py` — router
+- `backend/app/services/sql_service.py` — agent execution, keyword blocking, `asyncio.to_thread()`
+- `backend/app/core/config.py` — `SQL_QUERY_DATABASE_URL` setting
+- `frontend/src/components/chat/InputBar.tsx` — `Database` toggle button + SQL mode badge
+- `frontend/src/pages/ChatPage.tsx` — SQL routing, `sqlThreadIds` state, SQL banner, result display

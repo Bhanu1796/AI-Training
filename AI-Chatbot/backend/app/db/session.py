@@ -7,6 +7,9 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.ENVIRONMENT == "development",
     pool_pre_ping=True,
+    # Supabase uses pgbouncer — prepared statements are not supported across pool
+    # connections. Setting cache size to 0 disables server-side prepared statements.
+    connect_args={"statement_cache_size": 0},
 )
 
 AsyncSessionLocal = async_sessionmaker(

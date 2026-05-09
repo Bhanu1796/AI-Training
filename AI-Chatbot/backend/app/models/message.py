@@ -28,3 +28,4 @@ class Message(Base):
 
     thread: Mapped["Thread"] = relationship("Thread", back_populates="messages")  # type: ignore[name-defined]
     user: Mapped["User"] = relationship("User", back_populates="messages")  # type: ignore[name-defined]
+    files: Mapped[list["UploadedFile"]] = relationship("UploadedFile", foreign_keys="UploadedFile.message_id", lazy="selectin")  # type: ignore[name-defined]

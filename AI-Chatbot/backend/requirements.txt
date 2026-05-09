@@ -28,7 +28,7 @@ chromadb==0.5.3
 # File handling
 aiofiles==23.2.1
 python-multipart==0.0.9
-python-magic==0.4.27
+filetype>=1.2.0
 
 # Document loaders
 pypdf==4.2.0

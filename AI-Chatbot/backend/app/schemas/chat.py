@@ -4,6 +4,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.schemas.file import FileRead
+
 
 class ThreadCreate(BaseModel):
     title: str = "New Chat"
@@ -35,5 +37,6 @@ class MessageRead(BaseModel):
     content: str
     token_count: Optional[int] = None
     created_at: datetime
+    files: list[FileRead] = []
 
     model_config = {"from_attributes": True}

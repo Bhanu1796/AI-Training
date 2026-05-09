@@ -54,12 +54,12 @@ export const chatApi = {
     api.get<Message[]>(`/chat/threads/${threadId}/messages`).then((r) => r.data),
 
   /** Returns a ReadableStream for SSE streaming */
-  sendMessage: (threadId: string, content: string): Promise<ReadableStream<Uint8Array>> =>
+  sendMessage: (threadId: string, content: string, fileIds?: string[]): Promise<ReadableStream<Uint8Array>> =>
     fetch(`/api/chat/threads/${threadId}/messages`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, thread_id: threadId }),
+      body: JSON.stringify({ content, thread_id: threadId, file_ids: fileIds ?? [] }),
     }).then((res) => {
       if (!res.ok) throw new Error('Failed to send message')
       return res.body!
@@ -85,12 +85,12 @@ export const filesApi = {
 // ── RAG ───────────────────────────────────────────────────────────────────────
 
 export const ragApi = {
-  query: (threadId: string, query: string): Promise<ReadableStream<Uint8Array>> =>
+  query: (threadId: string, query: string, fileIds: string[] = []): Promise<ReadableStream<Uint8Array>> =>
     fetch('/api/rag/query', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ thread_id: threadId, query }),
+      body: JSON.stringify({ thread_id: threadId, query, file_ids: fileIds }),
     }).then((res) => {
       if (!res.ok) throw new Error('RAG query failed')
       return res.body!

@@ -113,7 +113,10 @@ async def send_message(
         # Use a fresh session owned by the generator so it commits after streaming
         from app.db.session import AsyncSessionLocal
         async with AsyncSessionLocal() as stream_db:
-            async for chunk in stream_chat_response(stream_db, thread_id, current_user, body.content):
+            async for chunk in stream_chat_response(
+                stream_db, thread_id, current_user, body.content,
+                file_ids=body.file_ids,
+            ):
                 yield chunk
             await stream_db.commit()
 

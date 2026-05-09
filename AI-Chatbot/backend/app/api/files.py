@@ -32,9 +32,11 @@ async def upload(
     if ingest:
         from app.services.rag_service import ingest_uploaded_file
         try:
-            await ingest_uploaded_file(db_file, str(current_user.id))
+            await ingest_uploaded_file(db_file, str(current_user.id), thread_id=str(thread_id) if thread_id else None)
         except ValueError as e:
             raise HTTPException(status_code=422, detail={"error": "ingest_error", "message": str(e)})
+        except Exception as e:
+            raise HTTPException(status_code=500, detail={"error": "ingest_error", "message": str(e)})
 
     from app.schemas.file import FileRead
     return FileUploadResponse(file=FileRead.model_validate(db_file))

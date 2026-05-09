@@ -21,7 +21,7 @@ async def load_history(
     result = await db.execute(
         select(Message)
         .where(Message.thread_id == thread_id)
-        .order_by(Message.created_at.desc())
+        .order_by(Message.created_at.desc(), Message.role.asc())
         .limit(limit)
     )
     messages: Sequence[Message] = result.scalars().all()

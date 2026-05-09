@@ -23,13 +23,14 @@ export interface Message {
   content: string
   token_count: number | null
   created_at: string
+  files?: UploadedFile[]
 }
 
 export interface UploadedFile {
   id: string
   original_filename: string
   mime_type: string
-  file_type: 'image' | 'video' | 'pdf' | 'excel' | 'other'
+  file_type: 'image' | 'video' | 'pdf' | 'excel' | 'code' | 'formula' | 'other'
   file_size: number
   created_at: string
 }

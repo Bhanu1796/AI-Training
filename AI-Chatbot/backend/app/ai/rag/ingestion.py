@@ -23,6 +23,7 @@ async def ingest_document(
     mime_type: str,
     user_id: str,
     file_id: str,
+    thread_id: str | None = None,
 ) -> int:
     """Load, chunk, and embed a document. Returns the number of chunks stored."""
     loader_cls = _LOADER_MAP.get(mime_type)
@@ -36,6 +37,8 @@ async def ingest_document(
     for chunk in chunks:
         chunk.metadata["file_id"] = file_id
         chunk.metadata["user_id"] = user_id
+        if thread_id:
+            chunk.metadata["thread_id"] = thread_id
 
     vectorstore = get_user_vectorstore(user_id)
     ids = [str(uuid.uuid4()) for _ in chunks]

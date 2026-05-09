@@ -382,6 +382,6 @@ Confirmed bugs and environment-specific issues. Check this section before debugg
 
 **KI-05 — gspread separate from google-auth** ModuleNotFoundError: No module named 'gspread' occurs even when google-auth is installed. → gspread is a separate package. Add it explicitly to requirements.txt.
 
-**KI-06 — RAG answers not persisted** If stream\_rag\_response does not receive db, user\_uuid, and thread\_id parameters, RAG answers are visible during streaming but lost on refresh. The RAG service must call save\_message for both the user question and the assembled assistant response, matching the chat service pattern.
+**KI-06 — RAG answers not persisted** With `StreamingResponse`, FastAPI's `get_db` commit may race against the generator finishing. Fix: call `await db.commit()` explicitly in `stream_rag_response` immediately after `save_message("user", ...)` and again after `save_message("assistant", ...)`. This ensures both messages are committed to the DB well before the frontend's `invalidateQueries` fires ~1.5 s later. **Fixed in rag_service.py.**
 
 **KI-07 — PowerShell multi-line Python commands** Newlines in PowerShell \-c "..." strings trigger multi-line input mode (\>\>), hanging indefinitely. → Use single-line Python one-liners or run each python \-c "..." invocation separately.  

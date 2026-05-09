@@ -19,6 +19,9 @@ class UploadedFile(Base):
     thread_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("threads.id", ondelete="SET NULL"), nullable=True
     )
+    message_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     original_filename: Mapped[str] = mapped_column(String(500), nullable=False)
     stored_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(255), nullable=False)
