@@ -40,6 +40,7 @@ google-auth==2.31.0
 
 # Research Agent
 arxiv>=2.1.0
+mcp>=1.0.0
 mcp-simple-arxiv
 langchain-mcp-adapters
 

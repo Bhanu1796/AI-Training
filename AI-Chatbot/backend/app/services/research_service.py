@@ -13,6 +13,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.llm import llm
+from app.ai.mcp_client import search_arxiv_via_mcp
 from app.models.user import User
 from app.services.chat_service import save_message
 
@@ -140,7 +141,11 @@ async def stream_research_digest(
 
     # ── Phase 1: Initial search ───────────────────────────────────────────────
     yield f"🔍 Searching arXiv for **{query}**...\n\n"
-    papers: list[dict] = await asyncio.to_thread(_search_arxiv, query, min(max_papers, 5))
+    try:
+        papers: list[dict] = await search_arxiv_via_mcp(query, min(max_papers, 5))
+    except Exception as exc:
+        logger.warning("MCP search failed (%s) — falling back to direct arxiv", exc)
+        papers = await asyncio.to_thread(_search_arxiv, query, min(max_papers, 5))
     yield f"📄 Found {len(papers)} papers. Evaluating coverage...\n\n"
 
     # ── Phase 2: Coverage evaluation (max 2 rounds total) ────────────────────
@@ -161,7 +166,11 @@ async def stream_research_digest(
         # ── Phase 3: Optional refined search (only once) ─────────────────────
         if not sufficient and refined_query.strip():
             yield f"🔎 Expanding search: **{refined_query.strip()}**...\n\n"
-            extra = await asyncio.to_thread(_search_arxiv, refined_query.strip(), 5)
+            try:
+                extra = await search_arxiv_via_mcp(refined_query.strip(), 5)
+            except Exception as exc:
+                logger.warning("MCP refined search failed (%s) — falling back to direct arxiv", exc)
+                extra = await asyncio.to_thread(_search_arxiv, refined_query.strip(), 5)
 
             # Deduplicate by arxiv ID
             seen_ids = {p["id"] for p in papers}
