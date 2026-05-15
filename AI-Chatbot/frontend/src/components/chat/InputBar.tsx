@@ -1,8 +1,14 @@
 import { useRef, useState, useEffect } from 'react'
-import { ArrowUp, Paperclip, Loader2, X, FileText, ImageIcon, FileVideo, Wand2, Code2, Sigma, Database } from 'lucide-react'
+import { ArrowUp, Paperclip, Loader2, X, FileText, ImageIcon, FileVideo, Code2, Sigma, Database, Table2 } from 'lucide-react'
+
+/** Extract the bare spreadsheet ID from a full Google Sheets URL or return the input as-is. */
+function extractSheetId(input: string): string {
+  const m = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
+  return m ? m[1] : input.trim()
+}
 
 interface InputBarProps {
-  onSend: (content: string, files?: File[], imageMode?: boolean, sqlMode?: boolean) => void
+  onSend: (content: string, files?: File[], imageMode?: boolean, sqlMode?: boolean, sheetsMode?: boolean, spreadsheetId?: string) => void
   threadId: string | null
   disabled?: boolean
   placeholder?: string
@@ -13,14 +19,18 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [imageMode, setImageMode] = useState(false)
   const [sqlMode, setSqlMode] = useState(false)
+  const [sheetsMode, setSheetsMode] = useState(false)
+  const [sheetsUrl, setSheetsUrl] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Clear attachments and image mode whenever the active thread changes
+  // Clear attachments and modes whenever the active thread changes
   useEffect(() => {
     setPendingFiles([])
     setImageMode(false)
     setSqlMode(false)
+    setSheetsMode(false)
+    setSheetsUrl('')
     if (fileInputRef.current) fileInputRef.current.value = ''
   }, [threadId])
 
@@ -34,11 +44,12 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
   const handleSubmit = () => {
     const trimmed = value.trim()
     if ((!trimmed && pendingFiles.length === 0) || disabled) return
-    onSend(trimmed, pendingFiles.length > 0 ? pendingFiles : undefined, imageMode, sqlMode)
+    const spreadsheetId = sheetsMode ? extractSheetId(sheetsUrl) : undefined
+    onSend(trimmed, pendingFiles.length > 0 ? pendingFiles : undefined, imageMode, sqlMode, sheetsMode, spreadsheetId)
     setValue('')
     setPendingFiles([])
-    setImageMode(false)
     setSqlMode(false)
+    // Keep sheetsMode + sheetsUrl active so the next question stays in sheets mode
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }
 
@@ -81,20 +92,20 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
   const canSend = (value.trim().length > 0 || pendingFiles.length > 0) && !disabled
 
   return (
-    <div className="px-4 pb-5 pt-2 bg-[#0f0f0f] shrink-0">
+    <div className="px-4 pb-5 pt-2 bg-transparent shrink-0">
       <div className="max-w-3xl mx-auto">
-        <div className="flex flex-col rounded-2xl border border-white/[0.10] bg-[#1a1a1a] shadow-xl shadow-black/40 overflow-hidden focus-within:border-white/[0.18] transition-colors">
+        <div className="flex flex-col rounded-[28px] border border-slate-200/70 bg-white shadow-float overflow-hidden focus-within:border-blue-300 focus-within:shadow-glow-blue transition-all duration-200">
 
-          {/* Image mode indicator */}
-          {imageMode && (
+          {/* SQL mode indicator */}
+          {sqlMode && (
             <div className="flex items-center gap-1.5 px-3 pt-2.5">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/25 text-violet-300 text-xs">
-                <Wand2 className="w-3.5 h-3.5 shrink-0" />
-                <span>Image generation mode</span>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-cyan-50 border border-cyan-200 text-cyan-700 text-xs">
+                <Database className="w-3.5 h-3.5 shrink-0" />
+                <span>SQL query mode — ask questions about the database</span>
                 <button
                   type="button"
-                  onClick={() => setImageMode(false)}
-                  className="ml-0.5 text-violet-400/60 hover:text-violet-200 transition-colors"
+                  onClick={() => setSqlMode(false)}
+                  className="ml-0.5 text-cyan-500/60 hover:text-cyan-700 transition-colors"
                   title="Cancel"
                 >
                   <X className="w-3 h-3" />
@@ -103,16 +114,22 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
             </div>
           )}
 
-          {/* SQL mode indicator */}
-          {sqlMode && (
+          {/* Sheets mode indicator */}
+          {sheetsMode && (
             <div className="flex items-center gap-1.5 px-3 pt-2.5">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 text-xs">
-                <Database className="w-3.5 h-3.5 shrink-0" />
-                <span>SQL query mode — ask questions about the database</span>
+              <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-violet-50 border border-violet-200 text-violet-700 text-xs w-full">
+                <Table2 className="w-3.5 h-3.5 shrink-0" />
+                <input
+                  type="text"
+                  value={sheetsUrl}
+                  onChange={(e) => setSheetsUrl(e.target.value)}
+                  placeholder="Paste Google Sheets URL or ID…"
+                  className="flex-1 bg-transparent outline-none placeholder-violet-400 text-violet-700 min-w-0"
+                />
                 <button
                   type="button"
-                  onClick={() => setSqlMode(false)}
-                  className="ml-0.5 text-cyan-400/60 hover:text-cyan-200 transition-colors"
+                  onClick={() => { setSheetsMode(false); setSheetsUrl('') }}
+                  className="ml-0.5 text-violet-400/60 hover:text-violet-700 transition-colors shrink-0"
                   title="Cancel"
                 >
                   <X className="w-3 h-3" />
@@ -130,7 +147,7 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
                 return (
                   <div
                     key={file.name}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/25 text-violet-300 text-xs"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 text-xs"
                   >
                     {isImage && previewUrl ? (
                       <img
@@ -146,7 +163,7 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
                     <button
                       type="button"
                       onClick={() => removeFile(file.name)}
-                      className="ml-0.5 text-violet-400/60 hover:text-violet-200 transition-colors shrink-0"
+                      className="ml-0.5 text-blue-400/60 hover:text-blue-600 transition-colors shrink-0"
                       title="Remove"
                     >
                       <X className="w-3 h-3" />
@@ -167,7 +184,7 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
             disabled={disabled}
             placeholder={placeholder ?? 'Message Amzur AI\u2026'}
             rows={1}
-            className="w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-sm text-gray-200 placeholder-gray-600 outline-none disabled:opacity-50 leading-relaxed"
+            className="w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-sm text-slate-800 placeholder-slate-400 outline-none disabled:opacity-50 leading-relaxed"
           />
 
           {/* Actions row */}
@@ -177,36 +194,49 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={disabled}
-                className="p-1.5 rounded-lg text-gray-600 hover:text-gray-300 hover:bg-white/8 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200"
                 title="Attach files"
               >
-                <Paperclip className={`w-4 h-4 ${pendingFiles.length > 0 ? 'text-violet-400' : ''}`} />
+                <Paperclip className={`w-4 h-4 ${pendingFiles.length > 0 ? 'text-blue-500' : ''}`} />
               </button>
               <button
                 type="button"
                 onClick={() => setImageMode((m) => !m)}
                 disabled={disabled}
                 title={imageMode ? 'Image generation mode ON — click to turn off' : 'Image generation mode'}
-                className={`p-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+                className={`p-1.5 rounded-xl transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed ${
                   imageMode
-                    ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/50'
-                    : 'text-gray-600 hover:text-gray-300 hover:bg-white/8'
+                    ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-300'
+                    : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                <Wand2 className="w-4 h-4" />
+                <ImageIcon className="w-4 h-4" />
               </button>
               <button
                 type="button"
                 onClick={() => setSqlMode((m) => !m)}
                 disabled={disabled}
                 title={sqlMode ? 'SQL query mode ON — click to turn off' : 'SQL query mode — ask questions about the database'}
-                className={`p-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+                className={`p-1.5 rounded-xl transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed ${
                   sqlMode
-                    ? 'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/50'
-                    : 'text-gray-600 hover:text-gray-300 hover:bg-white/8'
+                    ? 'bg-cyan-50 text-cyan-600 ring-1 ring-cyan-300'
+                    : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 <Database className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setSheetsMode((m) => !m)}
+                disabled={disabled}
+                title={sheetsMode ? 'Spreadsheet mode ON — click to turn off' : 'Query a Google Sheet or uploaded CSV/Excel file'}
+                className={`p-1.5 rounded-xl transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed ${
+                  sheetsMode
+                    ? 'bg-violet-50 text-violet-600 ring-1 ring-violet-300'
+                    : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <Table2 className="w-4 h-4" />
               </button>
               <input
                 ref={fileInputRef}
@@ -230,14 +260,14 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-700 select-none">
+              <span className="text-[10px] text-slate-400 select-none">
                 Shift+Enter for new line
               </span>
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={!canSend}
-                className="w-7 h-7 rounded-lg flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-md shadow-violet-500/20 active:scale-95"
+                className="w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-400 hover:from-blue-500 hover:via-sky-400 hover:to-cyan-300 text-white shadow-glow-blue hover:scale-[1.05] active:scale-95"
               >
                 {disabled ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />

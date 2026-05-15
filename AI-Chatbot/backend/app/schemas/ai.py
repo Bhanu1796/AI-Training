@@ -37,3 +37,14 @@ class SheetsQueryRequest(BaseModel):
 class SheetsQueryResponse(BaseModel):
     answer: str
     thread_id: str
+
+
+class SheetsFileQueryRequest(BaseModel):
+    file_id: str
+    question: str
+    thread_id: str
+
+
+class SheetsFileQueryResponse(BaseModel):
+    answer: str
+    thread_id: str

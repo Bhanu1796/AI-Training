@@ -3,6 +3,7 @@ import type {
   FileUploadResponse,
   ImageGenerateResponse,
   Message,
+  SheetsFileQueryResponse,
   SheetsQueryResponse,
   SQLQueryResponse,
   Thread,
@@ -122,6 +123,15 @@ export const sheetsApi = {
     api
       .post<SheetsQueryResponse>('/sheets/query', {
         spreadsheet_id: spreadsheetId,
+        question,
+        thread_id: threadId,
+      })
+      .then((r) => r.data),
+
+  queryFile: (fileId: string, question: string, threadId: string) =>
+    api
+      .post<SheetsFileQueryResponse>('/sheets/query-file', {
+        file_id: fileId,
         question,
         thread_id: threadId,
       })

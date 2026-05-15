@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { SquarePen, Pencil, Trash2, Loader2, Sparkles, MessageSquare, MoreHorizontal } from 'lucide-react'
+import { Plus, Pencil, Trash2, Loader2, Sparkles, MessageSquare, MoreHorizontal } from 'lucide-react'
 import { useThreadList } from '@/hooks/useThreadList'
 import type { Thread } from '@/types'
 
@@ -68,14 +68,14 @@ export function ThreadSidebar({ activeThreadId, onSelectThread, onNewChat }: Thr
   const groups = groupThreadsByDate(threads)
 
   return (
-    <div className="w-64 h-full flex flex-col bg-[#0f0f0f] border-r border-white/[0.08]">
+    <div className="w-64 h-full flex flex-col bg-white border-r border-slate-200/60">
       {/* Header row: brand */}
-      <div className="flex items-center px-4 py-2.5 shrink-0 border-b border-white/[0.06]">
+      <div className="flex items-center px-4 py-2.5 shrink-0 border-b border-slate-200/60">
         <div className="flex items-center gap-2 h-9 px-1">
-          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
+          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-600 via-sky-500 to-cyan-400 flex items-center justify-center shadow-glow-blue">
             <Sparkles className="w-3 h-3 text-white" />
           </div>
-          <span className="text-sm font-semibold text-gray-100">Amzur AI</span>
+          <span className="text-sm font-semibold text-slate-900">Amzur AI</span>
         </div>
       </div>
 
@@ -83,9 +83,9 @@ export function ThreadSidebar({ activeThreadId, onSelectThread, onNewChat }: Thr
       <div className="px-3 pt-4 pb-2 shrink-0">
         <button
           onClick={onNewChat}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.05] border border-white/[0.07] hover:bg-white/[0.09] text-sm text-gray-300 hover:text-gray-100 transition-colors"
+          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-slate-100 border border-slate-200/60 hover:bg-blue-50 hover:border-blue-200 text-sm text-slate-600 hover:text-blue-700 transition-all duration-200 shadow-panel"
         >
-          <SquarePen className="w-4 h-4 text-violet-400" />
+          <Plus className="w-4 h-4 text-blue-500" />
           New chat
         </button>
       </div>
@@ -94,38 +94,38 @@ export function ThreadSidebar({ activeThreadId, onSelectThread, onNewChat }: Thr
       <div className="flex-1 overflow-y-auto px-2 pb-4">
         {isLoading ? (
           <div className="flex items-center justify-center py-10">
-            <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />
+            <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
           </div>
         ) : threads.length === 0 ? (
           <div className="text-center py-10 px-4">
-            <MessageSquare className="w-7 h-7 text-gray-700 mx-auto mb-2" />
-            <p className="text-xs text-gray-600 leading-relaxed">
+            <MessageSquare className="w-7 h-7 text-slate-300 mx-auto mb-2" />
+            <p className="text-xs text-slate-400 leading-relaxed">
               No conversations yet. Start a new chat!
             </p>
           </div>
         ) : (
           groups.map((group) => (
             <div key={group.label} className="mb-3">
-              <p className="text-[10px] font-medium uppercase tracking-widest text-gray-700 px-2 py-1">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-2 py-1">
                 {group.label}
               </p>
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 {group.threads.map((thread: Thread) => (
                   <div
                     key={thread.id}
                     onClick={() => onSelectThread(thread.id)}
-                    className={`group relative flex items-center gap-2.5 rounded-lg px-3 py-2.5 cursor-pointer text-sm transition-all ${
+                    className={`group relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 cursor-pointer text-sm transition-all duration-200 ${
                       activeThreadId === thread.id
-                        ? 'bg-white/[0.09] text-gray-100'
-                        : 'hover:bg-white/[0.05] text-gray-500 hover:text-gray-200'
+                        ? 'bg-blue-500/[0.08] text-slate-900'
+                        : 'hover:bg-slate-100/80 text-slate-500 hover:text-slate-800'
                     }`}
                   >
                     {/* Active indicator */}
                     {activeThreadId === thread.id && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-violet-500 rounded-full" />
+                      <span className="absolute left-0 top-2 bottom-2 w-[3px] bg-gradient-to-b from-blue-500 to-cyan-400 rounded-full" />
                     )}
 
-                    <MessageSquare className={`w-4 h-4 shrink-0 ${activeThreadId === thread.id ? 'text-violet-400' : 'text-gray-700 group-hover:text-gray-500'}`} />
+                    <MessageSquare className={`w-4 h-4 shrink-0 ${activeThreadId === thread.id ? 'text-blue-500' : 'text-slate-400 group-hover:text-slate-500'}`} />
 
                     {editingId === thread.id ? (
                       <input
@@ -138,7 +138,7 @@ export function ThreadSidebar({ activeThreadId, onSelectThread, onNewChat }: Thr
                           if (e.key === 'Escape') setEditingId(null)
                         }}
                         onClick={(e) => e.stopPropagation()}
-                        className="flex-1 min-w-0 bg-white/10 border border-violet-500/50 rounded px-1.5 py-0.5 text-xs outline-none text-gray-100"
+                        className="flex-1 min-w-0 bg-white border border-blue-300 rounded-lg px-1.5 py-0.5 text-xs outline-none text-slate-900 focus:ring-2 focus:ring-blue-500/20"
                       />
                     ) : (
                       <span className="flex-1 truncate text-sm">{thread.title}</span>
@@ -158,7 +158,7 @@ export function ThreadSidebar({ activeThreadId, onSelectThread, onNewChat }: Thr
                               setMenuOpenId(thread.id)
                             }
                           }}
-                          className="p-1 rounded hover:bg-white/10 text-gray-600 hover:text-gray-300 transition-colors"
+                          className="p-1 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors"
                           title="Options"
                         >
                           <MoreHorizontal className="w-3.5 h-3.5" />
@@ -178,7 +178,7 @@ export function ThreadSidebar({ activeThreadId, onSelectThread, onNewChat }: Thr
         <div
           ref={menuRef}
           style={{ top: menuPos.top, left: menuPos.left }}
-          className="fixed w-36 rounded-xl bg-[#1e1e1e] border border-white/[0.09] shadow-xl shadow-black/50 overflow-hidden z-[9999]"
+          className="fixed w-36 rounded-2xl bg-white border border-slate-200 shadow-[0_8px_30px_rgba(15,23,42,0.12)] overflow-hidden z-[9999] animate-fade-in"
         >
           <button
             onClick={(e) => {
@@ -188,12 +188,12 @@ export function ThreadSidebar({ activeThreadId, onSelectThread, onNewChat }: Thr
               setMenuOpenId(null)
               setMenuPos(null)
             }}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-300 hover:bg-white/[0.07] hover:text-gray-100 transition-colors"
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors"
           >
-            <Pencil className="w-3.5 h-3.5 text-gray-500" />
+            <Pencil className="w-3.5 h-3.5 text-slate-400" />
             Rename
           </button>
-          <div className="h-px bg-white/[0.06] mx-2" />
+          <div className="h-px bg-slate-100 mx-2" />
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -201,7 +201,7 @@ export function ThreadSidebar({ activeThreadId, onSelectThread, onNewChat }: Thr
               setMenuOpenId(null)
               setMenuPos(null)
             }}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
             Delete

@@ -61,6 +61,11 @@ export interface SheetsQueryResponse {
   thread_id: string
 }
 
+export interface SheetsFileQueryResponse {
+  answer: string
+  thread_id: string
+}
+
 export interface ApiError {
   error: string
   message: string
