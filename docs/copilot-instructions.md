@@ -22,6 +22,7 @@ All AI calls route exclusively through the Amzur LiteLLM proxy at litellm.amzur.
 | Vector Store | ChromaDB (persisted to disk) |
 | Auth | Email/password (bcrypt \+ JWT) \+ Google OAuth 2.0 |
 | File Handling | Images, video, PDF, Excel, Google Sheets |
+| Research | arxiv Python library (arXiv search API) |
 
 ---
 
@@ -302,6 +303,77 @@ UPLOAD_DIR=./uploads
 
 ---
 
+## Research Digest Agent
+
+Project 10 adds an autonomous research agent that searches arXiv, evaluates coverage, and streams a structured digest. It follows the same Router → Service → LCEL chain → `StreamingResponse` pattern used by all other projects.
+
+### arxiv Library
+
+Use the `arxiv` Python library (not MCP) for all arXiv API calls. Import it in the service layer only — never in routers or chains.
+
+```py
+import arxiv
+
+def _search_arxiv(query: str, max_results: int = 8) -> list[dict]:
+    client = arxiv.Client()
+    search = arxiv.Search(query=query, max_results=max_results, sort_by=arxiv.SortCriterion.Relevance)
+    results = []
+    for r in client.results(search):
+        results.append({
+            "id": r.entry_id,
+            "title": r.title,
+            "authors": ", ".join(str(a) for a in r.authors[:3]),
+            "year": r.published.year,
+            "abstract": r.summary[:400],
+            "url": r.entry_id,
+        })
+    return results
+```
+
+`arxiv.Client().results()` is synchronous — always wrap with `asyncio.to_thread()` in async service functions.
+
+### Streaming Pattern for Agents
+
+The research service uses a **two-phase streaming generator**:
+
+1. **Search phase** — yield plain-text progress chunks (`🔍 Searching...`, `📄 Found N papers...`)
+2. **Evaluation phase** — call `llm | JsonOutputParser()` to decide if coverage is sufficient; if not, trigger one refined search
+3. **Digest phase** — stream structured markdown tokens via `async for chunk in digest_chain.astream(...)`
+
+All three phases yield into the same `AsyncIterator[str]` returned to `StreamingResponse`. No SSE protocol — plain text, identical to chat and RAG streaming.
+
+### Coverage Evaluation
+
+Use a dedicated LCEL chain with `JsonOutputParser` to let the LLM decide when enough papers have been found:
+
+```py
+from langchain_core.output_parsers import JsonOutputParser
+
+evaluation_chain = evaluation_prompt | llm | JsonOutputParser()
+result = await evaluation_chain.ainvoke(
+    {"query": query, "paper_titles": titles},
+    config={"metadata": {"user_email": user_email}},
+)
+# result = {"sufficient": bool, "refined_query": str}
+```
+
+Max **2 search rounds** total — guard against runaway tool calls.
+
+### Prompt Files
+
+- `backend/app/ai/prompts/research.txt` — system prompt for the digest LCEL chain
+- Digest sections: **Executive Summary**, **Key Papers** (numbered, arxiv links, abstract excerpts), **Key Findings**, **Research Gaps & Future Directions**
+
+### Copilot Directives — Research Agent
+
+- `_search_arxiv` is always sync — always wrap with `asyncio.to_thread()`, never `await` it directly.
+- Maximum 2 arxiv search rounds per request — enforce with a loop counter.
+- Coverage evaluation uses `llm | JsonOutputParser()` — not a raw string parse.
+- Research mode is one-shot in the UI — reset `researchMode` after each submit (like SQL mode, not like Sheets mode).
+- Research routing in `ChatPage.handleSend` must come **before** the SQL, Sheets, image, and RAG checks.
+
+---
+
 ## Testing
 
 - **Backend:** pytest \+ pytest-asyncio; httpx.AsyncClient for route integration tests; isolated test DB  
@@ -347,6 +419,9 @@ These are standing instructions. Apply them on every generation, regardless of w
 - NL-to-SQL keyword block must be case-insensitive. Always include all six: INSERT, UPDATE, DELETE, DROP, TRUNCATE, ALTER.  
 - SQLDatabase requires postgresql+psycopg2:// — always use \_build\_sync\_db\_url() to convert from asyncpg.  
 - return\_intermediate\_steps=True on all agents (SQL and Pandas) — required to extract generated query from output.
+- arxiv `_search_arxiv` is sync — wrap every call with `asyncio.to_thread()`. Never call `arxiv.Client().results()` directly in an async function.
+- Research coverage evaluation: guard `result.get("refined_query", "")` — `JsonOutputParser` may omit optional keys.
+- Max 2 search iterations per research request — enforce with a counter, not a while loop.
 
 ---
 
@@ -366,6 +441,8 @@ Significant decisions that affect the whole codebase. Understand these before ch
 
 **AD-06 — Synchronous driver for LangChain SQL agent** LangChain's SQLDatabase uses SQLAlchemy's synchronous reflection path. A separate psycopg2 driver and URL conversion is required. The FastAPI async path continues to use asyncpg unchanged.
 
+**AD-07 — Two-phase streaming for the research agent** The research service yields progress text (search status lines) and digest tokens into the same `AsyncIterator[str]`, returned as a single `StreamingResponse`. This avoids a new SSE event-type protocol and keeps the frontend stream reader identical to chat and RAG. The tradeoff is that progress lines and digest content are indistinguishable on the wire, but visual separation (divider line `---`) is sufficient for the current requirement.
+
 ---
 
 ## Known Issues
@@ -384,4 +461,8 @@ Confirmed bugs and environment-specific issues. Check this section before debugg
 
 **KI-06 — RAG answers not persisted** With `StreamingResponse`, FastAPI's `get_db` commit may race against the generator finishing. Fix: call `await db.commit()` explicitly in `stream_rag_response` immediately after `save_message("user", ...)` and again after `save_message("assistant", ...)`. This ensures both messages are committed to the DB well before the frontend's `invalidateQueries` fires ~1.5 s later. **Fixed in rag_service.py.**
 
-**KI-07 — PowerShell multi-line Python commands** Newlines in PowerShell \-c "..." strings trigger multi-line input mode (\>\>), hanging indefinitely. → Use single-line Python one-liners or run each python \-c "..." invocation separately.  
+**KI-07 — PowerShell multi-line Python commands** Newlines in PowerShell \-c "..." strings trigger multi-line input mode (\>\>), hanging indefinitely. → Use single-line Python one-liners or run each python \-c "..." invocation separately.
+
+**KI-08 — arxiv `Client().results()` is a generator, not a list** `arxiv.Client().results(search)` returns a lazy generator. Wrapping in `list()` inside `asyncio.to_thread()` forces full evaluation in the thread pool, which is required. Never iterate the generator outside the thread — it makes network calls and will block the event loop.
+
+**KI-09 — JsonOutputParser hallucinated keys** When the LLM omits `refined_query` from coverage evaluation output, `JsonOutputParser` raises `OutputParserException`. Guard with `.get("refined_query", "")` when reading the result dict, and wrap the evaluation chain call in a `try/except` that falls back to `{"sufficient": True}`.

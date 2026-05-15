@@ -138,4 +138,20 @@ export const sheetsApi = {
       .then((r) => r.data),
 }
 
+// ── Research Digest ───────────────────────────────────────────────────────────
+
+export const researchApi = {
+  /** Returns a ReadableStream for SSE streaming of the research digest */
+  query: (threadId: string, query: string, maxPapers = 10): Promise<ReadableStream<Uint8Array>> =>
+    fetch('/api/research/query', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thread_id: threadId, query, max_papers: maxPapers }),
+    }).then((res) => {
+      if (!res.ok) throw new Error('Research query failed')
+      return res.body!
+    }),
+}
+
 export default api

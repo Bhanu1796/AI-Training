@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
-import { ArrowUp, Paperclip, Loader2, X, FileText, ImageIcon, FileVideo, Code2, Sigma, Database, Table2 } from 'lucide-react'
+import { ArrowUp, Paperclip, Loader2, X, FileText, ImageIcon, FileVideo, Code2, Sigma, Database, Table2, FlaskConical } from 'lucide-react'
 
 /** Extract the bare spreadsheet ID from a full Google Sheets URL or return the input as-is. */
 function extractSheetId(input: string): string {
@@ -8,7 +8,7 @@ function extractSheetId(input: string): string {
 }
 
 interface InputBarProps {
-  onSend: (content: string, files?: File[], imageMode?: boolean, sqlMode?: boolean, sheetsMode?: boolean, spreadsheetId?: string) => void
+  onSend: (content: string, files?: File[], imageMode?: boolean, sqlMode?: boolean, sheetsMode?: boolean, spreadsheetId?: string, researchMode?: boolean) => void
   threadId: string | null
   disabled?: boolean
   placeholder?: string
@@ -21,6 +21,7 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
   const [sqlMode, setSqlMode] = useState(false)
   const [sheetsMode, setSheetsMode] = useState(false)
   const [sheetsUrl, setSheetsUrl] = useState('')
+  const [researchMode, setResearchMode] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -31,6 +32,7 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
     setSqlMode(false)
     setSheetsMode(false)
     setSheetsUrl('')
+    setResearchMode(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }, [threadId])
 
@@ -45,10 +47,11 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
     const trimmed = value.trim()
     if ((!trimmed && pendingFiles.length === 0) || disabled) return
     const spreadsheetId = sheetsMode ? extractSheetId(sheetsUrl) : undefined
-    onSend(trimmed, pendingFiles.length > 0 ? pendingFiles : undefined, imageMode, sqlMode, sheetsMode, spreadsheetId)
+    onSend(trimmed, pendingFiles.length > 0 ? pendingFiles : undefined, imageMode, sqlMode, sheetsMode, spreadsheetId, researchMode)
     setValue('')
     setPendingFiles([])
     setSqlMode(false)
+    setResearchMode(false)
     // Keep sheetsMode + sheetsUrl active so the next question stays in sheets mode
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }
@@ -130,6 +133,24 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
                   type="button"
                   onClick={() => { setSheetsMode(false); setSheetsUrl('') }}
                   className="ml-0.5 text-violet-400/60 hover:text-violet-700 transition-colors shrink-0"
+                  title="Cancel"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Research mode indicator */}
+          {researchMode && (
+            <div className="flex items-center gap-1.5 px-3 pt-2.5">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs">
+                <FlaskConical className="w-3.5 h-3.5 shrink-0" />
+                <span>Research mode — autonomously search and summarise arXiv papers</span>
+                <button
+                  type="button"
+                  onClick={() => setResearchMode(false)}
+                  className="ml-0.5 text-amber-500/60 hover:text-amber-700 transition-colors"
                   title="Cancel"
                 >
                   <X className="w-3 h-3" />
@@ -237,6 +258,19 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
                 }`}
               >
                 <Table2 className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setResearchMode((m) => !m)}
+                disabled={disabled}
+                title={researchMode ? 'Research mode ON — click to turn off' : 'Research mode — autonomously search arXiv and generate a digest'}
+                className={`p-1.5 rounded-xl transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed ${
+                  researchMode
+                    ? 'bg-amber-50 text-amber-600 ring-1 ring-amber-300'
+                    : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <FlaskConical className="w-4 h-4" />
               </button>
               <input
                 ref={fileInputRef}

@@ -38,6 +38,11 @@ unstructured[xlsx]==0.14.5
 gspread==6.2.1
 google-auth==2.31.0
 
+# Research Agent
+arxiv>=2.1.0
+mcp-simple-arxiv
+langchain-mcp-adapters
+
 # Data
 pandas==2.2.2
 openpyxl==3.1.5

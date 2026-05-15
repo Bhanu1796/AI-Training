@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { chatApi, ragApi } from '@/lib/api'
+import { chatApi, ragApi, researchApi } from '@/lib/api'
 import type { Message, UploadedFile } from '@/types'
 
 export function useChat(threadId: string | null) {
@@ -21,6 +21,7 @@ export function useChat(threadId: string | null) {
       overrideThreadId?: string,
       uploadedFiles?: UploadedFile[],
       ragFileIds?: string[],  // when set → use RAG chain
+      isResearch?: boolean,   // when true → use Research digest chain
     ) => {
       const tid = overrideThreadId ?? threadId
       if (!tid) return
@@ -43,8 +44,10 @@ export function useChat(threadId: string | null) {
       setStreamingContent('')
 
       try {
-        // Choose stream source: RAG chain or regular chat chain
-        const stream = ragFileIds?.length
+        // Choose stream source: Research digest, RAG chain, or regular chat chain
+        const stream = isResearch
+          ? await researchApi.query(tid, content)
+          : ragFileIds?.length
           ? await ragApi.query(tid, content, ragFileIds)
           : await chatApi.sendMessage(tid, content, uploadedFiles?.map((f) => f.id))
 

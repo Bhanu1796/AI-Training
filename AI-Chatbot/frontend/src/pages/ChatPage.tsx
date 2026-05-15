@@ -53,6 +53,8 @@ export default function ChatPage() {
   const [dataFileNames, setDataFileNames] = useState<Record<string, string>>({})
   // True while waiting for a data query response (Sheets or file)
   const [isDataQuerying, setIsDataQuerying] = useState(false)
+  // True while the research digest agent is running
+  const [isResearching, setIsResearching] = useState(false)
   const { user } = useAuth()
   const setUser = useAuthStore((s) => s.setUser)
   const queryClient = useQueryClient()
@@ -97,7 +99,7 @@ export default function ChatPage() {
     handleSend(content)
   }
 
-  const handleSend = async (content: string, files?: File[], imageMode?: boolean, sqlMode?: boolean, sheetsMode?: boolean, spreadsheetId?: string) => {
+  const handleSend = async (content: string, files?: File[], imageMode?: boolean, sqlMode?: boolean, sheetsMode?: boolean, spreadsheetId?: string, researchMode?: boolean) => {
     setIsSending(true)
     try {
       const _SHEETS_URL_RE = /https?:\/\/docs\.google\.com\/spreadsheets\/[^\s]*/i
@@ -199,6 +201,25 @@ export default function ChatPage() {
           queryClient.invalidateQueries({ queryKey: ['threads'] })
           return
         }
+      }
+
+      // ── Research digest path ──────────────────────────────────────────────────
+      // Activated when the user toggled Research mode in the InputBar.
+      // Routes through the autonomous arXiv search + streaming digest agent.
+      if (researchMode && content.trim()) {
+        setIsResearching(true)
+        try {
+          await sendMessage(content, tid, undefined, undefined, true)
+        } catch {
+          queryClient.setQueryData<Message[]>(['messages', tid], (prev) => [
+            ...(prev ?? []),
+            { id: crypto.randomUUID(), thread_id: tid, role: 'assistant', content: '⚠️ Research digest failed. Please try again.', token_count: null, created_at: new Date().toISOString() },
+          ])
+        } finally {
+          setIsResearching(false)
+        }
+        queryClient.invalidateQueries({ queryKey: ['threads'] })
+        return
       }
 
       // ── SQL query path ────────────────────────────────────────────────────────
@@ -632,7 +653,7 @@ export default function ChatPage() {
         <InputBar
           onSend={handleSend}
           threadId={activeThreadId}
-          disabled={isSending || isIngesting}
+          disabled={isSending || isIngesting || isResearching}
           placeholder={isWelcome ? 'Ask me anything…' : sqlThreadIds.has(activeThreadId ?? '') ? 'Ask about the database…' : (sheetsThreadIds.has(activeThreadId ?? '') || dataFileIds[activeThreadId ?? '']) ? 'Ask about your data…' : (ragFileIds[activeThreadId ?? ''] ?? []).length > 0 ? 'Ask about your documents…' : 'Message Amzur AI…'}
         />
       </div>

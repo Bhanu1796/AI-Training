@@ -10,6 +10,7 @@ from app.api import (
     files_router,
     image_router,
     rag_router,
+    research_router,
     sheets_router,
     sql_router,
 )
@@ -51,6 +52,7 @@ app.include_router(rag_router, prefix=_PREFIX)
 app.include_router(image_router, prefix=_PREFIX)
 app.include_router(sql_router, prefix=_PREFIX)
 app.include_router(sheets_router, prefix=_PREFIX)
+app.include_router(research_router, prefix=_PREFIX)
 
 
 @app.get("/api/health")

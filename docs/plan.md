@@ -98,6 +98,114 @@ This plan provides a comprehensive blueprint for implementing the Amzur AI Chat 
 - backend/app/models/ — ORM models.
 - backend/app/schemas/ — Pydantic schemas.
 - backend/app/ai/llm.py — LiteLLM client.
+
+---
+
+## Project Roadmap
+
+### Projects 1–9 ✅ Complete
+
+| # | Feature | Key Files |
+|---|---|---|
+| 1 | Threaded chat with streaming | `api/chat.py`, `services/chat_service.py` |
+| 2 | Email/password + Google OAuth | `api/auth.py`, `services/auth_service.py` |
+| 3 | File attachments (image, video, code, PDF) | `api/files.py`, `services/file_service.py` |
+| 4 | Conversation memory (last 20 messages) | `ai/memory/db_memory.py` |
+| 5 | Multi-modal input (base64 images/video) | `services/chat_service.py` |
+| 6 | AI image generation (Gemini Imagen 4) | `api/image.py`, `services/image_service.py` |
+| 7 | PDF RAG (ChromaDB + text-embedding-3-large) | `api/rag.py`, `services/rag_service.py`, `ai/rag/` |
+| 8 | NL-to-SQL agent (LangChain + psycopg2) | `api/sql_query.py`, `services/sql_service.py` |
+| 9 | Google Sheets + CSV Pandas agent | `api/sheets.py`, `services/sheets_service.py` |
+
+---
+
+### Project 10 — Research Digest Agent
+
+Autonomous agent that searches arXiv, evaluates whether the retrieved papers provide sufficient coverage, and streams a structured research digest to the browser in real time.
+
+#### Trigger
+User activates **Research mode** (amber FlaskConical toggle in InputBar) and submits a research topic.
+
+#### Architecture
+Follows the Router → Service → LCEL chain → `StreamingResponse` pattern established by Projects 7–9. No new database tables required.
+
+```
+POST /api/research/query
+  └── research.py (router)
+        └── research_service.stream_research_digest()
+              ├── Phase 1: asyncio.to_thread(_search_arxiv, query, max_results=8)
+              ├── Phase 2: evaluation_chain.ainvoke()   ← llm | JsonOutputParser
+              ├── Phase 3: asyncio.to_thread(_search_arxiv, refined_query, 6)  [if needed]
+              └── Phase 4: digest_chain.astream()       ← research_prompt | llm | StrOutputParser
+```
+
+#### New Files (Backend)
+
+| File | Purpose |
+|---|---|
+| `backend/app/api/research.py` | Router — `POST /research/query` → `StreamingResponse` |
+| `backend/app/services/research_service.py` | `_search_arxiv()` sync helper + `stream_research_digest()` generator |
+| `backend/app/ai/prompts/research.txt` | Digest system prompt (Executive Summary, Key Papers, Key Findings, Research Gaps) |
+
+#### Modified Files (Backend)
+
+| File | Change |
+|---|---|
+| `backend/requirements.txt` | Add `arxiv>=2.1.0` |
+| `backend/app/schemas/ai.py` | Add `ResearchDigestRequest(thread_id, query, max_papers=10)` |
+| `backend/app/api/__init__.py` | Export `research_router` |
+| `backend/app/main.py` | `app.include_router(research_router, prefix="/api")` |
+
+#### Modified Files (Frontend)
+
+| File | Change |
+|---|---|
+| `frontend/src/lib/api.ts` | Add `researchApi.query(threadId, query)` → `ReadableStream` via `fetch` |
+| `frontend/src/hooks/useChat.ts` | Add optional `isResearch?: boolean` 5th param; route to `researchApi.query()` |
+| `frontend/src/components/chat/InputBar.tsx` | Add Research mode toggle (amber `FlaskConical` icon + amber banner) |
+| `frontend/src/pages/ChatPage.tsx` | Add `isResearching` state + research routing block (before SQL check) |
+
+#### Streaming Output Format
+
+```
+🔍 Searching arXiv for **{query}**...
+
+📄 Found 8 papers. Evaluating coverage...
+
+✅ Coverage sufficient. Generating digest...
+
+---
+
+# Research Digest: {topic}
+
+## Executive Summary
+...
+
+## Key Papers
+1. **[Title](arxiv_url)** — Authors (Year)
+   > Abstract excerpt...
+
+## Key Findings
+- ...
+
+## Research Gaps & Future Directions
+- ...
+```
+
+#### Security Notes
+- No user-controlled input is passed directly to the arxiv library's network calls without sanitisation — the query is validated by Pydantic and truncated in the service.
+- Max 2 search rounds enforced with a counter to prevent runaway API usage.
+- arxiv is a public API — no credentials required or stored.
+
+#### Verification Checklist
+- [ ] `GET /api/docs` lists `POST /api/research/query`
+- [ ] Direct POST streams progress lines followed by structured markdown with arxiv links
+- [ ] Research mode toggle appears in InputBar (amber color)
+- [ ] Submitting a topic streams progress + digest live in the chat
+- [ ] Messages persisted to DB; visible after thread reload
+- [ ] Switching threads resets research mode
+- [ ] All existing modes (chat, RAG, SQL, Sheets, image) unaffected
+- [ ] `pytest backend/test/` passes without regressions
 - backend/app/ai/prompts/ — Prompt templates.
 - frontend/src/components/ — UI components.
 - frontend/src/lib/api.ts — API client.

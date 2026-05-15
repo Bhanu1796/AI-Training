@@ -48,3 +48,9 @@ class SheetsFileQueryRequest(BaseModel):
 class SheetsFileQueryResponse(BaseModel):
     answer: str
     thread_id: str
+
+
+class ResearchDigestRequest(BaseModel):
+    thread_id: str
+    query: str
+    max_papers: int = 10
