@@ -217,6 +217,7 @@ export default function ChatPage() {
           ])
         } finally {
           setIsResearching(false)
+          setIsSending(false)
         }
         queryClient.invalidateQueries({ queryKey: ['threads'] })
         return

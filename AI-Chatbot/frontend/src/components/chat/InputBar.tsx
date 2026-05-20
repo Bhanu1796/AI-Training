@@ -51,8 +51,7 @@ export function InputBar({ onSend, threadId, disabled, placeholder }: InputBarPr
     setValue('')
     setPendingFiles([])
     setSqlMode(false)
-    setResearchMode(false)
-    // Keep sheetsMode + sheetsUrl active so the next question stays in sheets mode
+    // Keep researchMode + sheetsMode active so the next question stays in the same mode
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }
 

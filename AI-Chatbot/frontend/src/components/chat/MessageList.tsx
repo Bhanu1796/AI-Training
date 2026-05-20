@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Sparkles, ImageIcon, Table2 } from 'lucide-react'
 import { ChatMessage } from './ChatMessage'
 import type { Message } from '@/types'
@@ -46,8 +48,16 @@ export function MessageList({ messages, streamingContent, isSqlQuerying, isDataQ
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shrink-0 mt-0.5 shadow-glow-blue">
               <Sparkles className="w-3.5 h-3.5 text-white animate-pulse" />
             </div>
-            <div className="max-w-[75%] px-4 py-3 rounded-[24px] rounded-tl-lg bg-white border border-slate-200/60 text-sm text-slate-700 leading-relaxed shadow-panel">
-              <p className="whitespace-pre-wrap">{streamingContent || '\u2026'}</p>
+            <div className="max-w-[85%] min-w-0 w-full px-4 py-3 rounded-[24px] rounded-tl-lg bg-white border border-slate-200/60 text-sm leading-relaxed shadow-panel">
+              <div className="prose prose-slate prose-sm max-w-none
+                prose-p:my-2 prose-headings:text-slate-900 prose-strong:text-slate-900
+                prose-a:text-blue-500 prose-a:no-underline hover:prose-a:underline
+                prose-li:text-slate-700 prose-code:text-blue-600 prose-code:bg-transparent
+                prose-blockquote:border-blue-400/40 prose-blockquote:text-slate-500">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {streamingContent || '…'}
+                </ReactMarkdown>
+              </div>
             </div>
           </div>
         )}

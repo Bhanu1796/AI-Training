@@ -67,8 +67,19 @@ async def search_arxiv_via_mcp(query: str, max_results: int = 5) -> list[dict]:
                 timeout=_TOOL_TIMEOUT,
             )
 
-    papers = _parse_mcp_results(str(result))
-    logger.debug("MCP search for %r returned %d papers", query, len(papers))
+    # result is a list of content items: [{'type': 'text', 'text': '...', 'id': '...'}]
+    # Extract the plain text before parsing.
+    if isinstance(result, list):
+        raw_text = "\n".join(
+            item.get("text", str(item)) if isinstance(item, dict) else str(item)
+            for item in result
+        )
+    else:
+        raw_text = str(result)
+
+    logger.debug("RAW MCP OUTPUT for %r:\n%s", query, raw_text)
+    papers = _parse_mcp_results(raw_text)
+    logger.info("MCP search for %r returned %d papers", query, len(papers))
     return papers
 
 
@@ -87,7 +98,8 @@ def _parse_mcp_results(text: str) -> list[dict]:
     papers: list[dict] = []
 
     # Split on lines that start a new numbered entry
-    entries = re.split(r"\n(?=\d+\. )", text.strip())
+    # entries = re.split(r"\n(?=\d+\. )", text.strip())
+    entries = re.split(r"\n\s*(?=\d+[.)]\s)", text.strip())
 
     for entry in entries:
         entry = entry.strip()
@@ -105,9 +117,14 @@ def _parse_mcp_results(text: str) -> list[dict]:
         # Collect labelled fields from the indented lines
         fields: dict[str, str] = {}
         for line in lines[1:]:
-            m = re.match(r"\s+(Authors|ID|Published|Preview|Categories):\s+(.+)", line)
-            if m:
-                fields[m.group(1)] = m.group(2).strip()
+            line = line.strip()
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            if key in {"Authors", "ID", "Published", "Preview", "Categories"}:
+                fields[key] = value
 
         # Build the URL — the ID field may be a bare arxiv ID or a full URL
         raw_id = fields.get("ID", "").split()[0]  # take first token only

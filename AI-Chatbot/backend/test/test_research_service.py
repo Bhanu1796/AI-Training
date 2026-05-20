@@ -152,16 +152,27 @@ async def test_mcp_fallback_on_failure(db):
     assert messages[1].role == "assistant"
 
 
-# ── Test 3: empty MCP result → early return with "no papers" message ──────────
+# ── Test 3: empty MCP result → fallback to direct arxiv ──────────────────────
 
 @pytest.mark.asyncio
-async def test_no_papers_returns_early(db):
+async def test_empty_mcp_falls_back_to_direct_arxiv(db):
+    """Empty MCP result is treated as a soft failure; direct arxiv is tried next."""
     user = await register_user(db, "research_empty@example.com", "pass")
     thread = await create_thread(db, user)
 
-    with patch(
-        "app.services.research_service.search_arxiv_via_mcp",
-        new=AsyncMock(return_value=[]),
+    with (
+        patch(
+            "app.services.research_service.search_arxiv_via_mcp",
+            new=AsyncMock(return_value=[]),   # MCP returns nothing
+        ) as mock_mcp,
+        patch(
+            "app.services.research_service._search_arxiv",
+            return_value=[],                  # direct arxiv also finds nothing
+        ) as mock_direct,
+        patch(
+            "app.services.research_service._evaluation_chain",
+            new=MagicMock(ainvoke=AsyncMock(return_value=_EVALUATION_SUFFICIENT)),
+        ),
     ):
         from app.services.research_service import stream_research_digest
 
@@ -169,11 +180,14 @@ async def test_no_papers_returns_early(db):
             stream_research_digest(db, thread.id, user, "nonexistent topic xyz")
         )
 
-    # A "no papers" warning chunk should be yielded
+    # Empty MCP triggered the fallback
+    mock_mcp.assert_called_once()
+    mock_direct.assert_called_once()
+
+    # "No papers found" message shown and persisted
     full_text = "".join(chunks)
     assert "No papers found" in full_text or "no papers" in full_text.lower()
 
-    # User question + early-return assistant message both persisted
     messages = await get_thread_messages(db, thread.id, user)
     assert len(messages) == 2
     assert messages[1].role == "assistant"

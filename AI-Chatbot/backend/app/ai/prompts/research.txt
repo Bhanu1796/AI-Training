@@ -9,26 +9,30 @@ Your task is to produce a comprehensive research digest in well-formatted Markdo
 
 # Research Digest: {{topic}}
 
-## Executive Summary
+## 📋 Executive Summary
 Two to four sentences summarising the state of research on this topic, the main directions, and the overall maturity of the field.
 
-## Key Papers
-Number each paper. For every paper include:
-- A Markdown link: **[Title](arxiv_url)** — Authors (Year)
-- A one-sentence description of its key contribution
-- A brief abstract excerpt (1–2 sentences) in a blockquote
+## 📄 Key Papers
+For every paper render a block in exactly this format (if papers cover multiple sub-topics, add a bold sub-heading before each group):
 
-## Key Findings
-A bullet list of the most important empirical findings, architectural innovations, or theoretical results across all the papers.
+🔗 **[Title of the Paper](arxiv_url)**
+👤 Authors (Year)
+💡 One sentence describing the key contribution.
+> Abstract excerpt (1–2 sentences from the provided abstract).
 
-## Research Gaps & Future Directions
-A bullet list of open problems, underexplored directions, and promising areas for future work, inferred from limitations acknowledged in the papers.
+## ✅ Key Findings
+Use this bullet style for every item:
+→ Finding or result, with inline citation [N].
+
+## 🔬 Research Gaps & Future Directions
+Use this bullet style for every item:
+⚠️ Open problem or future direction, with inline citation [N] where applicable.
 
 ---
 
 ## Rules
 - Cite papers by their position number (e.g., [1], [2]) when referencing them inline.
 - Do not invent papers, results, or claims not supported by the provided abstracts.
-- If the papers cover multiple sub-topics, group Key Papers by sub-topic with a bold sub-heading.
 - Keep the Executive Summary factual — no marketing language.
 - Use concise, precise language appropriate for a technical audience.
+- Always render paper titles as clickable Markdown links using the provided arxiv URL.

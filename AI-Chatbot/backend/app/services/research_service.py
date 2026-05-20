@@ -12,7 +12,7 @@ from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.llm import llm
+from app.ai.llm import llm, llm_long
 from app.ai.mcp_client import search_arxiv_via_mcp
 from app.models.user import User
 from app.services.chat_service import save_message
@@ -32,7 +32,7 @@ _digest_prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
-_digest_chain = _digest_prompt | llm | StrOutputParser()
+_digest_chain = _digest_prompt | llm_long | StrOutputParser()
 
 _evaluation_prompt = ChatPromptTemplate.from_messages(
     [
@@ -77,7 +77,7 @@ def _search_arxiv(query: str, max_results: int = 5) -> list[dict]:
     client = arxiv.Client(
         page_size=n,
         delay_seconds=3,   # arXiv recommends ≥3 s between requests
-        num_retries=5,     # retry on 429 / 503 with backoff
+        num_retries=2,     # reduced retries so 429 surfaces quickly
     )
     search = arxiv.Search(
         query=query,
@@ -97,6 +97,15 @@ def _search_arxiv(query: str, max_results: int = 5) -> list[dict]:
                     "url": r.entry_id,
                 }
             )
+    except arxiv.HTTPError as exc:
+        if exc.status == 429:
+            # Re-raise so the caller can show a rate-limit message
+            raise
+        import logging as _log
+        _log.getLogger(__name__).warning(
+            "arXiv search error for query %r: %s — returning %d partial results",
+            query, exc, len(results),
+        )
     except Exception as exc:
         import logging as _log
         _log.getLogger(__name__).warning(
@@ -139,14 +148,38 @@ async def stream_research_digest(
     await save_message(db, thread_id, user.id, "user", f"Research digest: {query}")
     await db.commit()
 
+    # Accumulate every yielded chunk so the persisted message matches the stream
+    full_response: str = ""
+
+    def _yield(text: str):
+        nonlocal full_response
+        full_response += text
+        return text
+
     # ── Phase 1: Initial search ───────────────────────────────────────────────
-    yield f"🔍 Searching arXiv for **{query}**...\n\n"
+    yield _yield(f"🔍 Searching arXiv for **{query}**...\n\n")
+    search_source = "MCP (mcp_simple_arxiv)"
     try:
         papers: list[dict] = await search_arxiv_via_mcp(query, min(max_papers, 5))
+        if not papers:
+            raise ValueError("MCP returned no results")
     except Exception as exc:
         logger.warning("MCP search failed (%s) — falling back to direct arxiv", exc)
-        papers = await asyncio.to_thread(_search_arxiv, query, min(max_papers, 5))
-    yield f"📄 Found {len(papers)} papers. Evaluating coverage...\n\n"
+        search_source = "Direct arXiv API (fallback)"
+        try:
+            papers = await asyncio.to_thread(_search_arxiv, query, min(max_papers, 5))
+        except arxiv.HTTPError as rate_exc:
+            if rate_exc.status == 429:
+                msg = (
+                    "⚠️ arXiv is temporarily rate-limited — too many requests in a short period. "
+                    "Please wait a few minutes and try again."
+                )
+                yield _yield(msg + "\n\n")
+                await save_message(db, thread_id, user.id, "assistant", msg)
+                await db.commit()
+                return
+            papers = []
+    yield _yield(f"📄 Found {len(papers)} papers via **{search_source}**. Evaluating coverage...\n\n")
 
     # ── Phase 2: Coverage evaluation (max 2 rounds total) ────────────────────
     if papers:
@@ -165,36 +198,31 @@ async def stream_research_digest(
 
         # ── Phase 3: Optional refined search (only once) ─────────────────────
         if not sufficient and refined_query.strip():
-            yield f"🔎 Expanding search: **{refined_query.strip()}**...\n\n"
+            yield _yield(f"🔎 Expanding search: **{refined_query.strip()}**...\n\n")
             try:
                 extra = await search_arxiv_via_mcp(refined_query.strip(), 5)
+                if not extra:
+                    raise ValueError("MCP returned no results")
             except Exception as exc:
                 logger.warning("MCP refined search failed (%s) — falling back to direct arxiv", exc)
                 extra = await asyncio.to_thread(_search_arxiv, refined_query.strip(), 5)
-
             # Deduplicate by arxiv ID
             seen_ids = {p["id"] for p in papers}
             papers.extend(p for p in extra if p["id"] not in seen_ids)
-            yield f"✅ Collected {len(papers)} papers total. Generating digest...\n\n"
+            yield _yield(f"\u2705 Collected {len(papers)} papers total. Generating digest...\n\n")
         else:
-            yield f"✅ Coverage sufficient. Generating digest...\n\n"
+            yield _yield(f"\u2705 Coverage sufficient. Generating digest...\n\n")
     else:
-        yield "⚠️ No papers found on arXiv for that query. Try a different topic.\n\n"
-        await save_message(
-            db,
-            thread_id,
-            user.id,
-            "assistant",
-            f"⚠️ No papers found on arXiv for **{query}**. Try a different or broader topic.",
-        )
+        msg = f"\u26a0\ufe0f No papers found on arXiv for **{query}**. Try a different or broader topic."
+        yield _yield("\u26a0\ufe0f No papers found on arXiv for that query. Try a different topic.\n\n")
+        await save_message(db, thread_id, user.id, "assistant", full_response)
         await db.commit()
         return
 
-    yield "---\n\n"
+    yield _yield("---\n\n")
 
     # ── Phase 4: Stream structured digest ────────────────────────────────────
     formatted_papers = _format_papers(papers)
-    full_response = ""
 
     async for chunk in _digest_chain.astream(
         {"query": query, "papers": formatted_papers, "history": []},
@@ -203,6 +231,6 @@ async def stream_research_digest(
         full_response += chunk
         yield chunk
 
-    # Persist assistant digest
+    # Persist the complete output (progress + digest)
     await save_message(db, thread_id, user.id, "assistant", full_response)
     await db.commit()

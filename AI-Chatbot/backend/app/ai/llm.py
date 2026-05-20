@@ -17,6 +17,16 @@ llm = ChatOpenAI(
     streaming=True,
 )
 
+# Long-timeout LLM — for chains that stream large outputs (research digest, etc.)
+llm_long = ChatOpenAI(
+    model=settings.LLM_MODEL,
+    base_url=settings.LITELLM_PROXY_URL,
+    api_key=settings.LITELLM_API_KEY,
+    timeout=120,
+    max_retries=1,
+    streaming=True,
+)
+
 # Sync OpenAI SDK client — kept for non-async contexts
 openai_client = OpenAI(
     api_key=settings.LITELLM_API_KEY,
