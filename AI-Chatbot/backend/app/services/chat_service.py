@@ -2,6 +2,7 @@
 Chat service — thread and message CRUD, streaming chat responses.
 """
 import base64
+import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,9 @@ from app.models.message import Message
 from app.models.thread import Thread
 from app.models.user import User
 from app.services.file_service import get_language_hint
+from app.services.n8n_service import create_ticket, is_ticket_intent
+
+logger = logging.getLogger(__name__)
 
 # System prompt without the LangChain template placeholders — used for direct LLM calls
 _SYSTEM_PROMPT = (
@@ -156,6 +160,35 @@ async def stream_chat_response(
     """Save user message, stream assistant response, then persist assistant message."""
     # Persist user message (link any uploaded files to it)
     await save_message(db, thread_id, user.id, "user", human_input, file_ids=file_ids)
+
+    # ── n8n sidecar: detect ticket intent and create ticket via n8n ──
+    if is_ticket_intent(human_input):
+        try:
+            result = await create_ticket(
+                user_email=user.email,
+                issue=human_input,
+                thread_id=str(thread_id),
+            )
+            next_action = result.get('next_action') or ''
+            ticket_reply = (
+                f"I've raised a support ticket for you.\n\n"
+                f"**Ticket ID:** {result.get('ticket_id', 'PENDING')}  \n"
+                f"**Category:** {result.get('category', 'General')}  \n"
+                f"**Priority:** {result.get('priority', 'medium')}  \n"
+                f"**Status:** {result.get('status', 'open')}  \n"
+                + (f"**Next Action:** {next_action}  \n" if next_action else "")
+                + f"\nA confirmation email has been sent to **{user.email}**. "
+                f"You can ask *\"what's the status of {result.get('ticket_id', 'my ticket')}?\"* at any time."
+            )
+        except Exception as exc:
+            logger.error("n8n ticket creation failed: %s", exc, exc_info=True)
+            ticket_reply = (
+                "I tried to raise a support ticket but the automation service is currently unavailable. "
+                "Please try again later or contact support directly."
+            )
+        yield ticket_reply
+        await save_message(db, thread_id, user.id, "assistant", ticket_reply)
+        return
 
     # Fetch attached files
     db_files = []

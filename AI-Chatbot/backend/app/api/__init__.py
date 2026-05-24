@@ -2,6 +2,7 @@ from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.files import router as files_router
 from app.api.image import router as image_router
+from app.api.n8n import router as n8n_router
 from app.api.rag import router as rag_router
 from app.api.research import router as research_router
 from app.api.sheets import router as sheets_router
@@ -12,6 +13,7 @@ __all__ = [
     "chat_router",
     "files_router",
     "image_router",
+    "n8n_router",
     "rag_router",
     "research_router",
     "sheets_router",

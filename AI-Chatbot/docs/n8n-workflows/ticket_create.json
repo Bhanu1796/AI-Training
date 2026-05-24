@@ -1,0 +1,298 @@
+{
+  "name": "ticket_create",
+  "nodes": [
+    {
+      "id": "tc-001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ticket-create",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "ticket-create-webhook"
+    },
+    {
+      "id": "tc-002",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "parameters": {
+        "jsCode": "const body = $input.item.json.body || {};\nconst user_email = body.user_email || '';\nconst issue = body.issue || '';\nconst thread_id = body.thread_id || '';\n\nif (!user_email || !issue) {\n  throw new Error('Validation failed: user_email and issue are required');\n}\n\nconst now = new Date();\nconst dateStr = now.toISOString().slice(0,10).replace(/-/g,'');\nconst rand = Math.random().toString(36).substring(2,8).toUpperCase();\nconst ticket_id = `TKT-${dateStr}-${rand}`;\n\nreturn [{ json: { ticket_id, user_email, issue, thread_id } }];"
+      }
+    },
+    {
+      "id": "tc-003",
+      "name": "Classify Issue",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [480, 0],
+      "parameters": {
+        "prompt": {
+          "values": {
+            "string": "=You are a support ticket classifier. Return ONLY valid JSON with exactly four fields:\n- category: one of Technical, Billing, Account, Feature Request, General\n- priority: one of high, medium, low\n- next_action: a short action sentence (max 10 words)\n- assigned_team: one of Engineering, Billing, Customer Success, Product, General Support\n\nNo explanation. No markdown. Raw JSON only.\n\nIssue: {{ $json.issue }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "tc-004",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [480, 220],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "name": "LiteLLM (training)"
+        }
+      }
+    },
+    {
+      "id": "tc-005",
+      "name": "Parse Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 0],
+      "parameters": {
+        "jsCode": "const prevData = $('Validate Input').item.json;\nconst llmText = $input.item.json.text || '{}';\n\nlet classification;\ntry {\n  const match = llmText.match(/\\{[\\s\\S]*\\}/);\n  classification = JSON.parse(match ? match[0] : llmText);\n} catch(e) {\n  classification = {\n    category: 'General',\n    priority: 'medium',\n    next_action: 'Review and assign to support team',\n    assigned_team: 'General Support'\n  };\n}\n\nreturn [{\n  json: {\n    ticket_id: prevData.ticket_id,\n    user_email: prevData.user_email,\n    issue: prevData.issue,\n    category: classification.category || 'General',\n    priority: classification.priority || 'medium',\n    next_action: classification.next_action || 'Review and assign',\n    assigned_team: classification.assigned_team || 'General Support'\n  }\n}];"
+      }
+    },
+    {
+      "id": "tc-006",
+      "name": "Update Ticket",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [960, 0],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO tickets (ticket_id, user_email, issue, category, priority, next_action, assigned_team, status, thread_id) VALUES ('{{ $json.ticket_id }}', '{{ $json.user_email }}', '{{ $json.issue }}', '{{ $json.category }}', '{{ $json.priority }}', '{{ $json.next_action }}', '{{ $json.assigned_team }}', CASE WHEN '{{ $json.priority }}' = 'high' THEN 'urgent' ELSE 'open' END, '{{ $json.thread_id }}') RETURNING ticket_id, user_email, category, priority, status, next_action, assigned_team",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres (training)"
+        }
+      }
+    },
+    {
+      "id": "tc-007",
+      "name": "Route by Priority",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [1200, 0],
+      "parameters": {
+        "mode": "rules",
+        "options": {},
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.priority }}",
+                    "rightValue": "high",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "outputKey": "0",
+              "renameOutput": true,
+              "outputKeyLabel": "high"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.priority }}",
+                    "rightValue": "medium",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "outputKey": "1",
+              "renameOutput": true,
+              "outputKeyLabel": "medium"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.priority }}",
+                    "rightValue": "low",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "outputKey": "2",
+              "renameOutput": true,
+              "outputKeyLabel": "low"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "tc-008",
+      "name": "Gmail HIGH",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1440, -300],
+      "parameters": {
+        "sendTo": "={{ $json.user_email }}",
+        "subject": "=[HIGH PRIORITY] Ticket {{ $json.ticket_id }} — Immediate Action Required",
+        "emailType": "text",
+        "message": "=A HIGH PRIORITY support ticket requires immediate attention.\n\nTicket ID:     {{ $json.ticket_id }}\nUser:          {{ $json.user_email }}\nCategory:      {{ $json.category }}\nPriority:      HIGH\nAssigned Team: {{ $json.assigned_team }}\nNext Action:   {{ $json.next_action }}\n\nIssue:\n{{ $('Validate Input').item.json.issue }}\n\nPlease respond within 1 hour.",
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail (training)"
+        }
+      }
+    },
+    {
+      "id": "tc-009",
+      "name": "Respond HIGH",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1680, -300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Update Ticket').item.json) }}"
+      }
+    },
+    {
+      "id": "tc-010",
+      "name": "Gmail MEDIUM",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1440, 0],
+      "parameters": {
+        "sendTo": "={{ $json.user_email }}",
+        "subject": "=Ticket {{ $json.ticket_id }} Received — We're On It",
+        "emailType": "text",
+        "message": "=Thank you for reaching out. Your support ticket has been received.\n\nTicket ID:  {{ $json.ticket_id }}\nCategory:   {{ $json.category }}\nPriority:   Medium\nStatus:     Open\nNext Step:  {{ $json.next_action }}\n\nWe aim to respond within 24 hours. You can check your ticket status any time by asking in the chat.",
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail (training)"
+        }
+      }
+    },
+    {
+      "id": "tc-011",
+      "name": "Respond MEDIUM",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1680, 0],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Update Ticket').item.json) }}"
+      }
+    },
+    {
+      "id": "tc-012",
+      "name": "Gmail LOW",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1440, 300],
+      "parameters": {
+        "sendTo": "={{ $json.user_email }}",
+        "subject": "=Ticket {{ $json.ticket_id }} Logged",
+        "emailType": "text",
+        "message": "=Your request has been logged.\n\nTicket ID: {{ $json.ticket_id }}\nCategory:  {{ $json.category }}\nPriority:  Low\nStatus:    Open\n\nWe will address it in our next scheduled review cycle.",
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail (training)"
+        }
+      }
+    },
+    {
+      "id": "tc-013",
+      "name": "Respond LOW",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1680, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Update Ticket').item.json) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Validate Input", "type": "main", "index": 0 }]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [{ "node": "Classify Issue", "type": "main", "index": 0 }]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [{ "node": "Classify Issue", "type": "ai_languageModel", "index": 0 }]
+      ]
+    },
+    "Classify Issue": {
+      "main": [
+        [{ "node": "Parse Classification", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Classification": {
+      "main": [
+        [{ "node": "Update Ticket", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Ticket": {
+      "main": [
+        [{ "node": "Route by Priority", "type": "main", "index": 0 }]
+      ]
+    },
+    "Route by Priority": {
+      "main": [
+        [{ "node": "Gmail HIGH", "type": "main", "index": 0 }],
+        [{ "node": "Gmail MEDIUM", "type": "main", "index": 0 }],
+        [{ "node": "Gmail LOW", "type": "main", "index": 0 }]
+      ]
+    },
+    "Gmail HIGH": {
+      "main": [
+        [{ "node": "Respond HIGH", "type": "main", "index": 0 }]
+      ]
+    },
+    "Gmail MEDIUM": {
+      "main": [
+        [{ "node": "Respond MEDIUM", "type": "main", "index": 0 }]
+      ]
+    },
+    "Gmail LOW": {
+      "main": [
+        [{ "node": "Respond LOW", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -86,3 +86,122 @@ Upload a CSV or Excel file, or paste a Google Sheet URL, and ask natural-languag
 - `frontend/src/lib/api.ts` — `sheetsApi.query()` + `sheetsApi.queryFile()`
 
 **See:** [Project 9 — CSV / Google Sheets Query Agent](./project9-sheets.md)
+
+## Project 10: n8n Automation Sidecar
+**Status:** 🔲 In Progress
+
+Integrate an n8n Cloud automation sidecar with the chatbot to handle async background workflows — ticket creation, status tracking, and Gmail notifications — without blocking the main chat flow.
+
+### What It Does
+- User types a support request in chat → chatbot detects it and calls n8n webhook
+- n8n creates a ticket in Supabase, categorises and prioritises it with LLM, sends Gmail confirmation
+- User can ask "what's the status of my ticket?" → chatbot calls n8n status webhook → returns live status
+
+### Architecture
+| Layer | Detail |
+|---|---|
+| **Trigger** | Chatbot backend calls `N8N_WEBHOOK_URL` via HTTP POST when ticket intent detected |
+| **n8n Workflow** | Receives payload → LLM categorises/prioritises → inserts into `tickets` table → sends Gmail |
+| **Status Flow** | Chatbot calls `N8N_STATUS_WEBHOOK_URL` with `ticket_id` → n8n queries DB → returns status |
+| **Auth** | `N8N_API_KEY` passed as `x-n8n-api-key` header on all webhook calls |
+| **Database** | `tickets` table in Supabase — created manually (not via Alembic) |
+| **Email** | Gmail credential in n8n (OAuth2) — sends confirmation to `user_email` |
+
+### New Files
+- `backend/app/api/n8n.py` — webhook proxy endpoints (if needed for inbound n8n → chatbot calls)
+- `backend/app/services/n8n_service.py` — HTTP calls to n8n webhooks, ticket intent detection
+- `backend/app/models/ticket.py` — SQLAlchemy model for `tickets` table (read-only from app side)
+- `backend/app/schemas/ai.py` — `TicketCreateRequest`, `TicketStatusResponse` additions
+
+### Environment Variables Added
+```
+N8N_WEBHOOK_URL=        # Main ticket creation webhook
+N8N_API_KEY=            # Auth header for all n8n calls
+N8N_STATUS_WEBHOOK_URL= # Ticket status lookup webhook
+```
+
+### Pre-class Setup (already done)
+- [x] n8n Cloud account created at `https://<yourname>.app.n8n.cloud`
+- [x] LiteLLM (training) credential registered in n8n
+- [x] Postgres (training) credential connected on port 6543
+- [x] `tickets` table created in Supabase via SQL Editor
+- [x] Blank n8n env vars added to `.env` and `.env.example`
+- [x] `verify_setup` workflow confirms n8n + LiteLLM connectivity
+
+### Session Tasks
+- [ ] Build ticket creation workflow in n8n (Webhook → LLM → Postgres → Gmail)
+- [ ] Build status lookup workflow in n8n (Webhook → Postgres → Respond)
+- [ ] Add `n8n_service.py` to call webhooks from chatbot backend
+- [ ] Detect ticket intent in `chat_service.py` and route to n8n
+- [ ] Wire status queries through n8n status webhook
+- [ ] Test end-to-end: chat → ticket created → Gmail sent → status query returns result
+
+**See:** [Project 10 — n8n Sidecar Architecture](./architecture.md)
+
+## Project 13: n8n Workflow — Proactive Ticket Intelligence
+**Status:** 🔲 In Progress
+
+A dual-trigger n8n workflow that demonstrates mastery of all 6 complexity requirements by extending the support ticket system built in Project 10. It combines real-time ticket processing (webhook) with a scheduled daily digest, integrating LiteLLM, Supabase, Gmail, and Google Sheets.
+
+### What It Does
+- **Workflow 1 (Webhook):** Chatbot triggers n8n when a ticket is created → LLM classifies category/priority/next_action → updates Supabase → routes based on priority (high = team alert, medium = acknowledgment, low = confirmation only) → responds with structured ticket data
+- **Workflow 2 (Schedule):** Runs daily at 9 AM weekdays → queries Supabase for last 24h tickets → aggregates stats → LLM generates natural-language insights → sends Gmail digest → appends row to Google Sheets for historical tracking
+
+### Complexity Requirements Met (6 of 6)
+
+| Requirement | Implementation |
+|---|---|
+| **Conditional Logic** | Switch node routes high/medium/low priority to different email actions |
+| **Data Transformation** | Code node aggregates raw DB rows into summary stats for the digest |
+| **Multiple Integrations** | Gmail + Google Sheets + LiteLLM + Supabase + chatbot backend webhook |
+| **Database I/O** | Read tickets (digest), update ticket fields (classification results) |
+| **Error Handling** | LiteLLM failure branch → fallback to default priority + alert email |
+| **Triggered** | Webhook (real-time ticket creation) + Schedule (daily 9 AM Mon–Fri) |
+
+### Integration with Coursework
+| System | Usage |
+|---|---|
+| Chatbot backend | `n8n_service.py` calls `N8N_WEBHOOK_URL` when ticket intent detected in chat |
+| Supabase `tickets` table | Created in Project 10 — read + updated by both workflows |
+| LiteLLM (training) | Classification in Workflow 1 + digest summary generation in Workflow 2 |
+| Gmail (training) | Priority alerts, user confirmations, daily digest email |
+| Google Sheets | Daily stats row — historical audit trail for ticket trends |
+
+### New Workflow Files
+- `docs/n8n-workflows/ticket_create.json` — Webhook + LLM classification + Switch routing + Gmail + Postgres UPDATE
+- `docs/n8n-workflows/ticket_digest.json` — Schedule + Postgres SELECT + Code aggregation + LLM summary + Gmail + Sheets
+
+### Implementation Phases
+
+#### Phase 1 — Ticket Create Workflow (Webhook)
+- [ ] Webhook node → validate inputs (Code node)
+- [ ] Basic LLM Chain → classify category, priority, next_action, assigned_team
+- [ ] Error branch → if LLM fails, default to medium + send alert
+- [ ] Postgres UPDATE → write classification results back to tickets table
+- [ ] Switch node → high / medium / low branches
+- [ ] Gmail nodes → per-branch email actions
+- [ ] Respond to Webhook → structured JSON response
+
+#### Phase 2 — Daily Digest Workflow (Schedule)
+- [ ] Schedule Trigger → 9 AM Mon–Fri
+- [ ] Postgres SELECT → tickets from last 24h
+- [ ] Code node → aggregate by category + priority
+- [ ] Basic LLM Chain → generate digest insights
+- [ ] Error branch → if LLM fails, send raw table
+- [ ] Gmail → send formatted digest email
+- [ ] Google Sheets → append daily stats row
+
+#### Phase 3 — Backend Integration
+- [ ] Update `N8N_WEBHOOK_URL` in `.env` after activating Workflow 1
+- [ ] Verify end-to-end: chat → ticket intent → n8n → Supabase update → Gmail sent
+- [ ] Verify digest: trigger manually → Gmail received + Sheets row appended
+
+### Error States
+| Failure | Behaviour |
+|---|---|
+| LiteLLM unavailable | Default category=General, priority=medium; send admin alert email |
+| Postgres INSERT fails | Respond 500 to chatbot; chatbot falls back to local acknowledgment |
+| Gmail send fails | Log error in n8n execution; ticket still created and confirmed via webhook response |
+| Invalid webhook payload | Code validation node returns 400 immediately; no DB write |
+
+**See:** [Project 13 — Architecture](./architecture.md#project-13--proactive-ticket-intelligence-architecture)

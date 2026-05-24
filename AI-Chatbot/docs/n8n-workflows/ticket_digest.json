@@ -1,0 +1,195 @@
+{
+  "name": "ticket_digest",
+  "nodes": [
+    {
+      "id": "td-001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1-5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "td-002",
+      "name": "Fetch Recent Tickets",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [240, 0],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT ticket_id, user_email, issue, category, priority, status, created_at FROM tickets WHERE created_at >= NOW() - INTERVAL '24 hours' ORDER BY priority DESC, created_at DESC",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres (training)"
+        }
+      }
+    },
+    {
+      "id": "td-003",
+      "name": "Aggregate Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0],
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst tickets = items.map(t => t.json).filter(t => t && t.ticket_id);\n\nif (tickets.length === 0) {\n  return [{ json: {\n    total: 0,\n    by_priority: { high: 0, medium: 0, low: 0 },\n    by_category: {},\n    open: 0,\n    resolved: 0,\n    top_category: 'None',\n    date: new Date().toISOString().slice(0, 10)\n  }}];\n}\n\nconst summary = {\n  total: tickets.length,\n  by_priority: { high: 0, medium: 0, low: 0 },\n  by_category: {},\n  open: 0,\n  resolved: 0,\n  date: new Date().toISOString().slice(0, 10)\n};\n\nfor (const t of tickets) {\n  const p = t.priority || 'medium';\n  summary.by_priority[p] = (summary.by_priority[p] || 0) + 1;\n  const c = t.category || 'General';\n  summary.by_category[c] = (summary.by_category[c] || 0) + 1;\n  if (t.status === 'resolved') summary.resolved++;\n  else summary.open++;\n}\n\nconst sortedCategories = Object.entries(summary.by_category).sort((a, b) => b[1] - a[1]);\nsummary.top_category = sortedCategories[0]?.[0] || 'None';\n\nreturn [{ json: summary }];"
+      }
+    },
+    {
+      "id": "td-004",
+      "name": "Generate Insights",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [720, 0],
+      "parameters": {
+        "prompt": {
+          "values": {
+            "string": "=You are a support operations analyst. Write a concise 3-5 sentence insights summary for the support team manager based on the following daily ticket data. Highlight patterns, risks, and recommended focus areas.\n\nDate: {{ $json.date }}\nTotal tickets: {{ $json.total }}\nHigh priority: {{ $json.by_priority.high }}\nMedium priority: {{ $json.by_priority.medium }}\nLow priority: {{ $json.by_priority.low }}\nOpen: {{ $json.open }}\nResolved: {{ $json.resolved }}\nTop category: {{ $json.top_category }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "td-005",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [720, 220],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "name": "LiteLLM (training)"
+        }
+      }
+    },
+    {
+      "id": "td-006",
+      "name": "Build Email Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 0],
+      "parameters": {
+        "jsCode": "const stats = $('Aggregate Stats').item.json;\nconst llmText = $input.item.json.text || '';\nconst insights = llmText.trim() || 'AI insights unavailable — please review the data manually.';\n\nconst lines = [\n  'Daily Support Ticket Digest',\n  '='.repeat(42),\n  `Date: ${stats.date}`,\n  '',\n  '── Summary ──────────────────────────────',\n  `Total Tickets:    ${stats.total}`,\n  `Open:             ${stats.open}`,\n  `Resolved:         ${stats.resolved}`,\n  '',\n  '── By Priority ──────────────────────────',\n  `High:             ${stats.by_priority.high}`,\n  `Medium:           ${stats.by_priority.medium}`,\n  `Low:              ${stats.by_priority.low}`,\n  '',\n  `Top Category:     ${stats.top_category}`,\n  '',\n  '── AI Insights ──────────────────────────',\n  insights,\n  '',\n  '─'.repeat(42),\n  'Full history tracked in Google Sheets.'\n].join('\\n');\n\nreturn [{\n  json: {\n    date: stats.date,\n    total: stats.total,\n    high: stats.by_priority.high,\n    medium: stats.by_priority.medium,\n    low: stats.by_priority.low,\n    open: stats.open,\n    resolved: stats.resolved,\n    top_category: stats.top_category,\n    email_body: lines,\n    subject: `Daily Ticket Digest — ${stats.date} (${stats.total} tickets)`\n  }\n}];"
+      }
+    },
+    {
+      "id": "td-007",
+      "name": "Send Digest Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1200, 0],
+      "parameters": {
+        "sendTo": "your-email@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.email_body }}",
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail (training)"
+        }
+      }
+    },
+    {
+      "id": "td-008",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1440, 0],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $json.date }}",
+            "Total Tickets": "={{ $json.total }}",
+            "High Priority": "={{ $json.high }}",
+            "Medium Priority": "={{ $json.medium }}",
+            "Low Priority": "={{ $json.low }}",
+            "Open": "={{ $json.open }}",
+            "Resolved": "={{ $json.resolved }}",
+            "Top Category": "={{ $json.top_category }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets (training)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [{ "node": "Fetch Recent Tickets", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Recent Tickets": {
+      "main": [
+        [{ "node": "Aggregate Stats", "type": "main", "index": 0 }]
+      ]
+    },
+    "Aggregate Stats": {
+      "main": [
+        [{ "node": "Generate Insights", "type": "main", "index": 0 }]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [{ "node": "Generate Insights", "type": "ai_languageModel", "index": 0 }]
+      ]
+    },
+    "Generate Insights": {
+      "main": [
+        [{ "node": "Build Email Content", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Email Content": {
+      "main": [
+        [{ "node": "Send Digest Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Digest Email": {
+      "main": [
+        [{ "node": "Log to Google Sheets", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

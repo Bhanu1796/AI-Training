@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     # Frontend
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # n8n automation sidecar
+    N8N_WEBHOOK_URL: str | None = None
+    N8N_API_KEY: str | None = None
+    N8N_STATUS_WEBHOOK_URL: str | None = None
+    N8N_DIGEST_SHEET_ID: str | None = None
+
     @property
     def max_upload_bytes(self) -> int:
         return self.MAX_UPLOAD_MB * 1024 * 1024

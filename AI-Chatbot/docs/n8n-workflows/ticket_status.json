@@ -1,0 +1,62 @@
+{
+  "name": "ticket_status",
+  "nodes": [
+    {
+      "id": "ts-0001-0001-0001-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ticket-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "ticket-status-webhook"
+    },
+    {
+      "id": "ts-0002-0002-0002-000000000002",
+      "name": "Get Ticket",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [240, 0],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT ticket_id, user_email, issue, category, priority, status, created_at, updated_at, next_action, assigned_team FROM tickets WHERE ticket_id = '{{ $json.body.ticket_id }}' LIMIT 1",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Postgres (training)"
+        }
+      }
+    },
+    {
+      "id": "ts-0003-0003-0003-000000000003",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [480, 0],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Get Ticket", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Ticket": {
+      "main": [
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

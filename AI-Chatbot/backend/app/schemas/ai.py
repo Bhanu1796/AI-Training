@@ -54,3 +54,32 @@ class ResearchDigestRequest(BaseModel):
     thread_id: str
     query: str
     max_papers: int = 10
+
+
+class TicketCreateRequest(BaseModel):
+    issue: str
+    thread_id: str
+
+
+class TicketCreateResponse(BaseModel):
+    ticket_id: str
+    status: str
+    category: str
+    priority: str
+    message: str
+    next_action: str | None = None
+    assigned_team: str | None = None
+
+
+class TicketStatusRequest(BaseModel):
+    ticket_id: str
+
+
+class TicketStatusResponse(BaseModel):
+    ticket_id: str
+    status: str
+    category: str
+    priority: str
+    created_at: str
+    next_action: str | None = None
+    assigned_team: str | None = None
